@@ -11,45 +11,42 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 
-public class JsonUtil
+public class Jackson2
 {
-	private static final ObjectMapper mapper = createFieldsMapper();
+	private static final ObjectMapper treeMapper = new ObjectMapper();
+	private static final ObjectMapper fieldsMapper = createFieldsMapper();
 
 	public static ObjectMapper createFieldsMapper()
 	{
 		ObjectMapper mapper = new ObjectMapper();
-		mapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
+
+		// limit to fields only
 		mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);
 		mapper.setVisibility(PropertyAccessor.GETTER, Visibility.NONE);
 		mapper.setVisibility(PropertyAccessor.SETTER, Visibility.NONE);
+
+		// general configuration
 		mapper.setSerializationInclusion(Include.NON_NULL);
+		mapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
+
 		return mapper;
 	}
 
-//	private static final ObjectMapper mapper = createJaxbMapper();
-//	public static ObjectMapper createJaxbMapper()
-//	{
-//		ObjectMapper mapper = new ObjectMapper();
-//		mapper.registerModule(new JaxbAnnotationModule());
-//		mapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
-//		mapper.setSerializationInclusion(Include.NON_NULL);
-//		mapper.registerModule(new JodaModule());
-//		return mapper;
-//	}
-
-	public static ObjectMapper mapper()
+	public static ObjectMapper fieldsMapper()
 	{
-		return mapper;
+		return fieldsMapper;
 	}
 
 	public static String toJson(Object o)
 	{
 		try
 		{
-			if (mapper.canSerialize(o.getClass()))
-				return (mapper.writeValueAsString(o));
+			if (fieldsMapper.canSerialize(o.getClass()))
+				return (fieldsMapper.writeValueAsString(o));
 		}
 		catch (JsonProcessingException e)
 		{
@@ -62,9 +59,9 @@ public class JsonUtil
 	{
 		try
 		{
-			if (mapper.canSerialize(o.getClass()))
+			if (fieldsMapper.canSerialize(o.getClass()))
 			{
-				mapper.writeValue(os, o);
+				fieldsMapper.writeValue(os, o);
 				return;
 			}
 		}
@@ -79,9 +76,9 @@ public class JsonUtil
 	{
 		try
 		{
-			if (mapper.canSerialize(o.getClass()))
+			if (fieldsMapper.canSerialize(o.getClass()))
 			{
-				mapper.writeValue(w, o);
+				fieldsMapper.writeValue(w, o);
 				return;
 			}
 		}
@@ -96,7 +93,7 @@ public class JsonUtil
 	{
 		try
 		{
-			return mapper.readValue(jsonStr, clz);
+			return fieldsMapper.readValue(jsonStr, clz);
 		}
 		catch (IOException e)
 		{
@@ -108,7 +105,7 @@ public class JsonUtil
 	{
 		try
 		{
-			return mapper.readValue(is, clz);
+			return fieldsMapper.readValue(is, clz);
 		}
 		catch (IOException e)
 		{
@@ -120,9 +117,33 @@ public class JsonUtil
 	{
 		try
 		{
-			return mapper.readValue(r, clz);
+			return fieldsMapper.readValue(r, clz);
 		}
 		catch (IOException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public static JsonNode parse(String jsonObject)
+	{
+		try
+		{
+			return treeMapper.readValue(jsonObject, JsonNode.class);
+		}
+		catch (Exception e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public static ArrayNode parseArray(String jsonArray)
+	{
+		try
+		{
+			return treeMapper.readValue(jsonArray, ArrayNode.class);
+		}
+		catch (Exception e)
 		{
 			throw new RuntimeException(e);
 		}

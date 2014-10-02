@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.1</version>
+	<version>0.1.1</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide light solutions for common situations</description>
@@ -37,7 +37,8 @@
 
 	<properties>
 		<version.javamail>1.4.7</version.javamail>
-		<version.jackson>2.4.2</version.jackson>
+		<version.jackson1>1.9.2</version.jackson1>
+		<version.jackson2>2.4.2</version.jackson2>
 		<version.servlets>2.5</version.servlets>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
@@ -54,9 +55,15 @@
 		</dependency>
 
 		<dependency>
+			<groupId>org.codehaus.jackson</groupId>
+			<artifactId>jackson-mapper-asl</artifactId>
+			<version>${version.jackson1}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
-			<version>${version.jackson}</version>
+			<version>${version.jackson2}</version>
 			<scope>provided</scope>
 		</dependency>
 
@@ -113,6 +120,7 @@
 				<configuration>
 					<message>Maven artifacts for ${project.version}</message>
 					<noJekyll>true</noJekyll>
+					<merge>true</merge>
 					<outputDirectory>${project.build.directory}/mvn-repo</outputDirectory>
 					<branch>refs/heads/mvn-repo</branch>
 					<includes>
