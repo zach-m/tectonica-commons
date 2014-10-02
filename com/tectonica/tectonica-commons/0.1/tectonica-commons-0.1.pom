@@ -14,10 +14,6 @@
 		<url>www.tectonica.co.il</url>
 	</organization>
 
-<!-- 	<scm> -->
-<!-- 		<url>https://github.com/zach-m/tectonica-commons</url> -->
-<!-- 	</scm> -->
-
 	<licenses>
 		<license>
 			<name>Apache License, Version 2.0</name>
@@ -26,6 +22,7 @@
 		</license>
 	</licenses>
 
+	<!-- intermediary local deployment -->
 	<distributionManagement>
 		<repository>
 			<id>internal.repo</id>
@@ -34,13 +31,49 @@
 		</repository>
 	</distributionManagement>
 
+	<!-- <scm> -->
+	<!-- <url>https://github.com/zach-m/tectonica-commons</url> -->
+	<!-- </scm> -->
+
 	<properties>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<github.global.server>github</github.global.server>
 		<version.javamail>1.4.7</version.javamail>
 		<version.jackson>2.4.2</version.jackson>
 		<version.servlets>2.5</version.servlets>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+		<!-- deployment to GitHub -->
+		<github.global.server>github</github.global.server>
 	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>javax.mail</groupId>
+			<artifactId>mail</artifactId>
+			<version>${version.javamail}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>${version.jackson}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>servlet-api</artifactId>
+			<version>${version.servlets}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
 
 	<build>
 		<plugins>
@@ -52,6 +85,7 @@
 				</configuration>
 			</plugin>
 
+			<!-- intermediary local deployment -->
 			<plugin>
 				<artifactId>maven-source-plugin</artifactId>
 				<executions>
@@ -65,6 +99,7 @@
 				</executions>
 			</plugin>
 
+			<!-- deployment to GitHub -->
 			<plugin>
 				<artifactId>maven-deploy-plugin</artifactId>
 				<configuration>
@@ -97,34 +132,4 @@
 			</plugin>
 		</plugins>
 	</build>
-
-	<dependencies>
-		<dependency>
-			<groupId>javax.mail</groupId>
-			<artifactId>mail</artifactId>
-			<version>${version.javamail}</version>
-			<scope>provided</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-			<version>${version.jackson}</version>
-			<scope>provided</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>servlet-api</artifactId>
-			<version>${version.servlets}</version>
-			<scope>provided</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.11</version>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
 </project>
