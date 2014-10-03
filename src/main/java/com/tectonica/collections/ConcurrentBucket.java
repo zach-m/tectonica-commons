@@ -26,11 +26,18 @@ public class ConcurrentBucket<K, V>
 
 	public static interface IndexMapper<V, F>
 	{
-		public F getIndexedFieldOf(V value);
+		public F getIndexedFieldOf(V entry);
 	}
 
 	abstract public static class Index<K, V, F>
 	{
+		protected final IndexMapper<V, F> mapFunc;
+
+		protected Index(IndexMapper<V, F> mapFunc)
+		{
+			this.mapFunc = mapFunc;
+		}
+
 		abstract public Set<K> get(F f);
 
 		public K getFirst(F f)
@@ -41,9 +48,9 @@ public class ConcurrentBucket<K, V>
 			return set.iterator().next();
 		}
 
-		abstract protected void map(V entry, K toKey);
+		abstract protected void map(Object indexField, K toKey);
 
-		abstract protected void unMap(V entry, K toKey);
+		abstract protected void unMap(Object indexField, K toKey);
 
 		abstract protected void clear();
 	}
@@ -57,6 +64,8 @@ public class ConcurrentBucket<K, V>
 
 	public <F> Index<K, V, F> createIndex(IndexMapper<V, F> mapFunc)
 	{
+		if (entries.size() > 0)
+			throw new RuntimeException("adding indices on non-empty data set is not supported yet");
 		Index<K, V, F> index = new ConcurrentBucketIndexImpl<>(mapFunc);
 		indices.add(index);
 		return index;
@@ -65,6 +74,8 @@ public class ConcurrentBucket<K, V>
 	// for advanced uses, not been tested yet..
 	public <F> void addIndex(Index<K, V, F> index)
 	{
+		if (entries.size() > 0)
+			throw new RuntimeException("adding indices on non-empty data set is not supported yet");
 		indices.add(index);
 	}
 
@@ -90,7 +101,7 @@ public class ConcurrentBucket<K, V>
 		if (existing != null)
 			return false;
 
-		addEntryToIndices(entry, key, indices);
+		addEntryToIndices(entry, key);
 
 		return true;
 	}
@@ -107,18 +118,15 @@ public class ConcurrentBucket<K, V>
 			index.clear();
 	}
 
-	private void addEntryToIndices(V addedEntry, K addedKey, List<? extends Index<K, V, ?>> indicesToUpdate)
+	private void addEntryToIndices(V addedEntry, K addedKey)
 	{
 		// addedKey is passed for efficiency, it should be clear that: addedKey = keyMapper.getKeyOf(addedEntry);
-		for (Index<K, V, ?> index : indicesToUpdate)
-			index.map(addedEntry, addedKey);
-	}
-
-	private void removeEntryFromIndices(V removedEntry, K removedKey, List<? extends Index<K, V, ?>> indicesToUpdate)
-	{
-		// removedKey is passed for efficiency, it should be clear that: removedKey = keyMapper.getKeyOf(removedEntry);
-		for (Index<K, V, ?> index : indicesToUpdate)
-			index.unMap(removedEntry, removedKey);
+		for (Index<K, V, ?> index : indices)
+		{
+			Object indexedField = index.mapFunc.getIndexedFieldOf(addedEntry);
+			if (indexedField != null)
+				index.map(indexedField, addedKey);
+		}
 	}
 
 	public static abstract class Updater<V>
@@ -131,11 +139,6 @@ public class ConcurrentBucket<K, V>
 		}
 
 		public abstract void update(V value);
-
-		public <K> List<? extends Index<K, V, ?>> getAffectedIndices()
-		{
-			return null;
-		};
 	}
 
 	public V update(K key, Updater<V> updater)
@@ -146,17 +149,38 @@ public class ConcurrentBucket<K, V>
 		return updateEntry(entry, updater, key);
 	}
 
+	public V updateEntry(V entry, Updater<V> updater)
+	{
+		return updateEntry(entry, updater, keyMapper.getKeyOf(entry));
+	}
+
 	private V updateEntry(V entry, Updater<V> updater, K key)
 	{
 		// entry is assumed to be non-null, key is assumed to be keyMapper.getKeyOf(entry)
 		synchronized (entry)
 		{
-			List<? extends Index<K, V, ?>> affectedIndices = updater.getAffectedIndices();
-			if (affectedIndices != null)
-				removeEntryFromIndices(entry, key, affectedIndices);
+			Object[] fieldsBefore = new Object[indices.size()];
+			for (int i = 0; i < indices.size(); i++)
+				fieldsBefore[i] = indices.get(i).mapFunc.getIndexedFieldOf(entry);
+
 			updater.update(entry);
-			if (affectedIndices != null)
-				addEntryToIndices(entry, key, affectedIndices);
+
+			// update indices
+			for (int i = 0; i < indices.size(); i++)
+			{
+				Index<K, V, ?> index = indices.get(i);
+				Object oldField = fieldsBefore[i];
+				Object newField = index.mapFunc.getIndexedFieldOf(entry);
+				boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
+				if (valueChanged)
+				{
+					if (oldField != null)
+						index.unMap(oldField, key);
+					if (newField != null)
+						index.map(newField, key);
+				}
+			}
+
 			return entry;
 		}
 	}
@@ -165,7 +189,7 @@ public class ConcurrentBucket<K, V>
 	{
 		for (V entry : entries.values())
 		{
-			updateEntry(entry, updater, keyMapper.getKeyOf(entry));
+			updateEntry(entry, updater);
 			if (updater.stopped)
 				break;
 		}
@@ -190,43 +214,38 @@ public class ConcurrentBucket<K, V>
 	 * 
 	 * @author Zach Melamed
 	 */
-	private static class ConcurrentBucketIndexImpl<K, V, F> extends ConcurrentBucket.Index<K, V, F>
+	public static class ConcurrentBucketIndexImpl<K, V, F> extends Index<K, V, F>
 	{
-		private ConcurrentBucket.IndexMapper<V, F> mapFunc;
-		private ConcurrentMultimap<F, K> map;
+		private ConcurrentMultimap<Object, K> dictionary;
 
-		ConcurrentBucketIndexImpl(ConcurrentBucket.IndexMapper<V, F> mapFunc)
+		public ConcurrentBucketIndexImpl(IndexMapper<V, F> mapFunc)
 		{
-			this.mapFunc = mapFunc;
-			this.map = new ConcurrentMultimap<>();
+			super(mapFunc);
+			this.dictionary = new ConcurrentMultimap<>();
 		}
 
 		@Override
 		public Set<K> get(F f)
 		{
-			return map.get(f);
+			return dictionary.get(f);
 		}
 
 		@Override
-		protected void map(V entry, K toKey)
+		protected void map(Object indexField, K toKey)
 		{
-			F indexField = mapFunc.getIndexedFieldOf(entry);
-			if (indexField != null)
-				map.put(indexField, toKey);
+			dictionary.put(indexField, toKey);
 		}
 
 		@Override
-		protected void unMap(V entry, K toKey)
+		protected void unMap(Object indexField, K toKey)
 		{
-			F indexField = mapFunc.getIndexedFieldOf(entry);
-			if (indexField != null)
-				map.remove(indexField, toKey);
+			dictionary.remove(indexField, toKey);
 		}
 
 		@Override
 		protected void clear()
 		{
-			map.clear();
+			dictionary.clear();
 		}
 	}
 }
