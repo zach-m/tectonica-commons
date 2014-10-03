@@ -9,7 +9,6 @@ import java.io.Writer;
 import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,7 +17,35 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 public class Jackson2
 {
 	private static final ObjectMapper treeMapper = new ObjectMapper();
+
+	public static JsonNode parse(String jsonObject)
+	{
+		try
+		{
+			return treeMapper.readValue(jsonObject, JsonNode.class);
+		}
+		catch (Exception e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public static ArrayNode parseArray(String jsonArray)
+	{
+		try
+		{
+			return treeMapper.readValue(jsonArray, ArrayNode.class);
+		}
+		catch (Exception e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	// ///////////////////////////////////////////////////////////////////
+
 	private static final ObjectMapper fieldsMapper = createFieldsMapper();
+	private static final ObjectMapper propsMapper = createPropsMapper();
 
 	public static ObjectMapper createFieldsMapper()
 	{
@@ -36,64 +63,29 @@ public class Jackson2
 		return mapper;
 	}
 
-	public static ObjectMapper fieldsMapper()
+	public static ObjectMapper createPropsMapper()
 	{
-		return fieldsMapper;
+		ObjectMapper mapper = new ObjectMapper();
+
+		// limit to props only
+		mapper.setVisibility(PropertyAccessor.FIELD, Visibility.NONE);
+		mapper.setVisibility(PropertyAccessor.GETTER, Visibility.ANY);
+		mapper.setVisibility(PropertyAccessor.SETTER, Visibility.ANY);
+
+		// general configuration
+		mapper.setSerializationInclusion(Include.NON_NULL);
+		mapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
+
+		return mapper;
 	}
 
-	public static String toJson(Object o)
+	// ///////////////////////////////////////////////////////////////////
+
+	public static String toJson(Object o, ObjectMapper mapper)
 	{
 		try
 		{
-			if (fieldsMapper.canSerialize(o.getClass()))
-				return (fieldsMapper.writeValueAsString(o));
-		}
-		catch (JsonProcessingException e)
-		{
-			throw new RuntimeException(e);
-		}
-		throw new RuntimeException("Unserializable object: " + o.toString());
-	}
-
-	public static void toJson(OutputStream os, Object o)
-	{
-		try
-		{
-			if (fieldsMapper.canSerialize(o.getClass()))
-			{
-				fieldsMapper.writeValue(os, o);
-				return;
-			}
-		}
-		catch (IOException e)
-		{
-			throw new RuntimeException(e);
-		}
-		throw new RuntimeException("Unserializable object: " + o.toString());
-	}
-
-	public static void toJson(Writer w, Object o)
-	{
-		try
-		{
-			if (fieldsMapper.canSerialize(o.getClass()))
-			{
-				fieldsMapper.writeValue(w, o);
-				return;
-			}
-		}
-		catch (IOException e)
-		{
-			throw new RuntimeException(e);
-		}
-		throw new RuntimeException("Unserializable object: " + o.toString());
-	}
-
-	public static <T> T fromJson(String jsonStr, Class<T> clz)
-	{
-		try
-		{
-			return fieldsMapper.readValue(jsonStr, clz);
+			return mapper.writeValueAsString(o);
 		}
 		catch (IOException e)
 		{
@@ -101,11 +93,11 @@ public class Jackson2
 		}
 	}
 
-	public static <T> T fromJson(InputStream is, Class<T> clz)
+	public static void toJson(OutputStream os, Object o, ObjectMapper mapper)
 	{
 		try
 		{
-			return fieldsMapper.readValue(is, clz);
+			mapper.writeValue(os, o);
 		}
 		catch (IOException e)
 		{
@@ -113,11 +105,11 @@ public class Jackson2
 		}
 	}
 
-	public static <T> T fromJson(Reader r, Class<T> clz)
+	public static void toJson(Writer w, Object o, ObjectMapper mapper)
 	{
 		try
 		{
-			return fieldsMapper.readValue(r, clz);
+			mapper.writeValue(w, o);
 		}
 		catch (IOException e)
 		{
@@ -125,27 +117,101 @@ public class Jackson2
 		}
 	}
 
-	public static JsonNode parse(String jsonObject)
+	public static <T> T fromJson(String jsonStr, Class<T> clz, ObjectMapper mapper)
 	{
 		try
 		{
-			return treeMapper.readValue(jsonObject, JsonNode.class);
+			return mapper.readValue(jsonStr, clz);
 		}
-		catch (Exception e)
+		catch (IOException e)
 		{
 			throw new RuntimeException(e);
 		}
 	}
-	
-	public static ArrayNode parseArray(String jsonArray)
+
+	public static <T> T fromJson(InputStream is, Class<T> clz, ObjectMapper mapper)
 	{
 		try
 		{
-			return treeMapper.readValue(jsonArray, ArrayNode.class);
+			return mapper.readValue(is, clz);
 		}
-		catch (Exception e)
+		catch (IOException e)
 		{
 			throw new RuntimeException(e);
 		}
+	}
+
+	public static <T> T fromJson(Reader r, Class<T> clz, ObjectMapper mapper)
+	{
+		try
+		{
+			return mapper.readValue(r, clz);
+		}
+		catch (IOException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	// ///////////////////////////////////////////////////////////////////
+
+	public static String propsToJson(Object o)
+	{
+		return toJson(o, propsMapper);
+	}
+
+	public static void propsToJson(OutputStream os, Object o)
+	{
+		toJson(os, o, propsMapper);
+	}
+
+	public static void propsToJson(Writer w, Object o)
+	{
+		toJson(w, o, propsMapper);
+	}
+
+	public static <T> T propsFromJson(String jsonStr, Class<T> clz)
+	{
+		return fromJson(jsonStr, clz, propsMapper);
+	}
+
+	public static <T> T propsFromJson(InputStream is, Class<T> clz)
+	{
+		return fromJson(is, clz, propsMapper);
+	}
+
+	public static <T> T propsFromJson(Reader r, Class<T> clz)
+	{
+		return fromJson(r, clz, propsMapper);
+	}
+
+	public static String fieldsToJson(Object o)
+	{
+		return toJson(o, fieldsMapper);
+	}
+
+	public static void fieldsToJson(OutputStream os, Object o)
+	{
+		toJson(os, o, fieldsMapper);
+	}
+
+	public static void fieldsToJson(Writer w, Object o)
+	{
+		toJson(w, o, fieldsMapper);
+	}
+
+	public static <T> T fieldsFromJson(String jsonStr, Class<T> clz)
+	{
+		return fromJson(jsonStr, clz, fieldsMapper);
+	}
+
+	public static <T> T fieldsFromJson(InputStream is, Class<T> clz)
+	{
+		return fromJson(is, clz, fieldsMapper);
+	}
+
+	public static <T> T fieldsFromJson(Reader r, Class<T> clz)
+	{
+		return fromJson(r, clz, fieldsMapper);
 	}
 }
