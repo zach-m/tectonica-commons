@@ -18,4 +18,12 @@ To use in your project, add the following repository to your `pom.xml`:
 		</repository>
 	</repositories>
 
+and then you can simply add the dependency:
+  
+	<dependency>
+		<groupId>com.tectonica</groupId>
+		<artifactId>tectonica-commons</artifactId>
+		<version>0.1.4</version>
+	</dependency>
+
  

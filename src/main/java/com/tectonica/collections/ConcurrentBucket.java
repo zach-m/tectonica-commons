@@ -1,10 +1,13 @@
 package com.tectonica.collections;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import com.tectonica.util.SerializeUtil;
 
 /**
  * Simple, yet powerful, in-memory key-value store, that can serve for caching or as an interim solution before permanent storage is
@@ -13,9 +16,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 
  * @author Zach Melamed
  */
-public class ConcurrentBucket<K, V>
+public class ConcurrentBucket<K, V extends Serializable>
 {
-	private final ConcurrentHashMap<K, V> entries;
+	private final ConcurrentHashMap<K, V> entries; // simulates a persistent storage
 	private final List<Index<K, V, ?>> indices;
 	private final KeyMapper<K, V> keyMapper;
 
@@ -29,7 +32,7 @@ public class ConcurrentBucket<K, V>
 		public F getIndexedFieldOf(V entry);
 	}
 
-	abstract public static class Index<K, V, F>
+	abstract public static class Index<K, V extends Serializable, F>
 	{
 		protected final IndexMapper<V, F> mapFunc;
 
@@ -79,19 +82,12 @@ public class ConcurrentBucket<K, V>
 		indices.add(index);
 	}
 
-	public List<Index<K, V, ?>> allIndices()
-	{
-		return indices;
-	}
-
 	public V get(K key)
 	{
-		return entries.get(key);
-	}
-
-	public Collection<V> getAll()
-	{
-		return entries.values();
+		V entry = entries.get(key);
+		if (entry == null)
+			return null;
+		return entry;
 	}
 
 	public boolean add(V entry)
@@ -132,13 +128,27 @@ public class ConcurrentBucket<K, V>
 	public static abstract class Updater<V>
 	{
 		private boolean stopped = false;
+		private boolean changed = false;
 
 		protected void stopIteration()
 		{
 			stopped = true;
 		}
 
-		public abstract void update(V value);
+		public boolean changed()
+		{
+			return changed;
+		}
+
+		/**
+		 * method inside which an entry may be safely modified
+		 * 
+		 * @param entry
+		 *            thread-safe entry on which the modifications are to be performed
+		 * @return
+		 *         true if the method indeed change the entry
+		 */
+		public abstract boolean update(V entry);
 	}
 
 	public V update(K key, Updater<V> updater)
@@ -149,7 +159,7 @@ public class ConcurrentBucket<K, V>
 		return updateEntry(entry, updater, key);
 	}
 
-	public V updateEntry(V entry, Updater<V> updater)
+	public V update(V entry, Updater<V> updater)
 	{
 		return updateEntry(entry, updater, keyMapper.getKeyOf(entry));
 	}
@@ -159,29 +169,37 @@ public class ConcurrentBucket<K, V>
 		// entry is assumed to be non-null, key is assumed to be keyMapper.getKeyOf(entry)
 		synchronized (entry)
 		{
-			Object[] fieldsBefore = new Object[indices.size()];
-			for (int i = 0; i < indices.size(); i++)
-				fieldsBefore[i] = indices.get(i).mapFunc.getIndexedFieldOf(entry);
+			// we're working on a copy so that getters remain consistent and exceptions don't leave partial updates
+			V updatedEntry = SerializeUtil.copyOf(entry); // TODO: not optimal, need to use a better cloning technique
 
-			updater.update(entry);
+			updater.changed = updater.update(updatedEntry);
 
-			// update indices
-			for (int i = 0; i < indices.size(); i++)
+			if (updater.changed)
 			{
-				Index<K, V, ?> index = indices.get(i);
-				Object oldField = fieldsBefore[i];
-				Object newField = index.mapFunc.getIndexedFieldOf(entry);
-				boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
-				if (valueChanged)
-				{
-					if (oldField != null)
-						index.unMap(oldField, key);
-					if (newField != null)
-						index.map(newField, key);
-				}
+				entries.put(key, updatedEntry);
+				reindex(key, entry, updatedEntry);
+				entry = updatedEntry;
 			}
 
 			return entry;
+		}
+	}
+
+	private void reindex(K key, V oldEntry, V newEntry)
+	{
+		for (int i = 0; i < indices.size(); i++)
+		{
+			Index<K, V, ?> index = indices.get(i);
+			Object oldField = index.mapFunc.getIndexedFieldOf(oldEntry);
+			Object newField = index.mapFunc.getIndexedFieldOf(newEntry);
+			boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
+			if (valueChanged)
+			{
+				if (oldField != null)
+					index.unMap(oldField, key);
+				if (newField != null)
+					index.map(newField, key);
+			}
 		}
 	}
 
@@ -189,7 +207,7 @@ public class ConcurrentBucket<K, V>
 	{
 		for (V entry : entries.values())
 		{
-			updateEntry(entry, updater);
+			updateEntry(entry, updater, keyMapper.getKeyOf(entry));
 			if (updater.stopped)
 				break;
 		}
@@ -214,7 +232,7 @@ public class ConcurrentBucket<K, V>
 	 * 
 	 * @author Zach Melamed
 	 */
-	public static class ConcurrentBucketIndexImpl<K, V, F> extends Index<K, V, F>
+	public static class ConcurrentBucketIndexImpl<K, V extends Serializable, F> extends Index<K, V, F>
 	{
 		private ConcurrentMultimap<Object, K> dictionary;
 

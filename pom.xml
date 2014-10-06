@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.1.3</version>
+	<version>0.1.4</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide light solutions for common situations</description>
