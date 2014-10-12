@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.1.4</version>
+	<version>0.1.5-SNAPSHOT</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide light solutions for common situations</description>
@@ -21,19 +21,19 @@
 			<distribution>repo</distribution>
 		</license>
 	</licenses>
-
-	<!-- intermediary local deployment -->
-	<distributionManagement>
-		<repository>
-			<id>internal.repo</id>
-			<name>Temporary Staging Repository</name>
-			<url>file://${project.build.directory}/mvn-repo</url>
-		</repository>
-	</distributionManagement>
-
-	<!-- <scm> -->
-	<!-- <url>https://github.com/zach-m/tectonica-commons</url> -->
-	<!-- </scm> -->
+	
+	<developers>
+		<developer>
+			<name>Zach Melamed</name>
+			<email>zach@tectonica.co.il</email>
+			<organization>Tectonica Labs</organization>
+			<organizationUrl>www.tectonica.co.il</organizationUrl>
+		</developer>
+	</developers>
+	
+	<scm>
+		<url>https://github.com/zach-m/tectonica-commons.git</url>
+	</scm>
 
 	<properties>
 		<version.javamail>1.4.7</version.javamail>
@@ -41,9 +41,6 @@
 		<version.jackson2>2.4.2</version.jackson2>
 		<version.servlets>2.5</version.servlets>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-		<!-- deployment to GitHub -->
-		<github.global.server>github</github.global.server>
 	</properties>
 
 	<dependencies>
@@ -54,6 +51,7 @@
 			<scope>provided</scope>
 		</dependency>
 
+		<!-- Jackson: two separate generations 1.x and 2.x -->
 		<dependency>
 			<groupId>org.codehaus.jackson</groupId>
 			<artifactId>jackson-mapper-asl</artifactId>
@@ -74,6 +72,7 @@
 			<scope>provided</scope>
 		</dependency>
 
+		<!-- Testing -->
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
@@ -91,53 +90,81 @@
 					<target>1.7</target>
 				</configuration>
 			</plugin>
-
-			<!-- intermediary local deployment -->
-			<plugin>
-				<artifactId>maven-source-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>attach-sources</id>
-						<phase>verify</phase>
-						<goals>
-							<goal>jar-no-fork</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- deployment to GitHub -->
-			<plugin>
-				<artifactId>maven-deploy-plugin</artifactId>
-				<configuration>
-					<altDeploymentRepository>internal.repo::default::file://${project.build.directory}/mvn-repo</altDeploymentRepository>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>com.github.github</groupId>
-				<artifactId>site-maven-plugin</artifactId>
-				<version>0.10</version>
-				<configuration>
-					<message>Maven artifacts for ${project.version}</message>
-					<noJekyll>true</noJekyll>
-					<merge>true</merge>
-					<outputDirectory>${project.build.directory}/mvn-repo</outputDirectory>
-					<branch>refs/heads/mvn-repo</branch>
-					<includes>
-						<include>**/*</include>
-					</includes>
-					<repositoryName>tectonica-commons</repositoryName>
-					<repositoryOwner>zach-m</repositoryOwner>
-				</configuration>
-				<executions>
-					<execution>
-						<goals>
-							<goal>site</goal>
-						</goals>
-						<phase>deploy</phase>
-					</execution>
-				</executions>
-			</plugin>
 		</plugins>
 	</build>
+
+	<!-- Deployment-related configuration -->
+	<profiles>
+		<profile>
+			<id>release</id>
+
+			<!-- Repository location -->
+			<distributionManagement>
+				<snapshotRepository>
+					<id>ossrh</id>
+					<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+				</snapshotRepository>
+			</distributionManagement>
+
+			<build>
+				<plugins>
+
+					<!-- Generate source code -->
+					<plugin>
+						<artifactId>maven-source-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>attach-sources</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>jar-no-fork</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+
+					<!-- Generate javadocs -->
+					<plugin>
+						<artifactId>maven-javadoc-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>attach-javadocs</id>
+								<goals>
+									<goal>jar</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+
+					<!-- GPG - needed for deployment -->
+					<plugin>
+						<artifactId>maven-gpg-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>sign-artifacts</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>sign</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+
+					<!-- deployment to OSSRH -->
+					<plugin>
+						<groupId>org.sonatype.plugins</groupId>
+						<artifactId>nexus-staging-maven-plugin</artifactId>
+						<version>1.6.4</version>
+						<extensions>true</extensions>
+						<configuration>
+							<serverId>ossrh</serverId>
+							<nexusUrl>https://oss.sonatype.org/</nexusUrl>
+							<autoReleaseAfterClose>true</autoReleaseAfterClose>
+						</configuration>
+					</plugin>
+
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>

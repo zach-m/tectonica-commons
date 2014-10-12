@@ -125,7 +125,7 @@ public class ConcurrentBucket<K, V extends Serializable>
 		}
 	}
 
-	public static abstract class Updater<V>
+	public static abstract class Updater<V extends Serializable>
 	{
 		private boolean stopped = false;
 		private boolean changed = false;
