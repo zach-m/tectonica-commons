@@ -28,9 +28,15 @@ public abstract class StaticServlet extends HttpServlet
 
 	protected abstract String getLocalPath(String servletPath, String uriPath);
 
-	protected abstract BasicAuthorizer getBasicAuthorizer();
+	protected BasicAuthorizer getBasicAuthorizer()
+	{
+		return null;
+	}
 
-	protected abstract TokenResolver getTokenResolver(String localPath);
+	protected TokenResolver getTokenResolver(String localPath)
+	{
+		return null;
+	}
 
 //	private TokenResolver createResolver(ConfigInfo config)
 //	{
@@ -70,7 +76,7 @@ public abstract class StaticServlet extends HttpServlet
 		os.close();
 	}
 
-	protected boolean checkAuthorization(HttpServletRequest request, HttpServletResponse response)
+	protected boolean checkAuthorization(HttpServletRequest request, HttpServletResponse response) throws IOException
 	{
 		BasicAuthorizer basicAuthorizer = getBasicAuthorizer();
 		if (basicAuthorizer == null)
