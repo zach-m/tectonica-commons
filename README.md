@@ -1,29 +1,16 @@
 tectonica-commons
-=================
+=
 
 Set of Java utility classes to provide lightweight solutions for common situations.  
 
-All classes are completely independent from one another, and each resides in a single file.
+All classes are completely independent, and each file can be used separately from the others in your project.
 
-To use in your project, add the following repository to your `pom.xml`:
+To use in your project, add the following to your `pom.xml`:
 
-	<repositories>
-		<repository>
-			<id>tectonica-commons</id>
-			<url>https://raw.github.com/zach-m/tectonica-commons/mvn-repo/</url>
-			<snapshots>
-				<enabled>true</enabled>
-				<updatePolicy>always</updatePolicy>
-			</snapshots>
-		</repository>
-	</repositories>
-
-and then you can simply add the dependency:
-  
 	<dependency>
 		<groupId>com.tectonica</groupId>
 		<artifactId>tectonica-commons</artifactId>
-		<version>0.1.4</version>
+		<version>0.1.5</version>
 	</dependency>
 
  

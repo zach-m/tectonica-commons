@@ -9,6 +9,7 @@ import java.io.Writer;
 import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +41,13 @@ public class Jackson2
 		{
 			throw new RuntimeException(e);
 		}
+	}
+
+	// ///////////////////////////////////////////////////////////////////
+
+	public static String escape(String text)
+	{
+		return new String(JsonStringEncoder.getInstance().quoteAsUTF8(text));
 	}
 
 	// ///////////////////////////////////////////////////////////////////

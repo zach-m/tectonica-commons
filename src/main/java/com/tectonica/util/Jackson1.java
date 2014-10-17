@@ -7,6 +7,7 @@ import java.io.Reader;
 import java.io.Writer;
 
 import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.io.JsonStringEncoder;
 import org.codehaus.jackson.map.DeserializationConfig;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.SerializationConfig;
@@ -39,6 +40,13 @@ public class Jackson1
 		{
 			throw new RuntimeException(e);
 		}
+	}
+
+	// ///////////////////////////////////////////////////////////////////
+
+	public static String escape(String text)
+	{
+		return new String(JsonStringEncoder.getInstance().quoteAsUTF8(text));
 	}
 
 	// ///////////////////////////////////////////////////////////////////
