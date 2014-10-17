@@ -31,9 +31,15 @@ public class CorsFilter implements ContainerResponseFilter
 		return response;
 	}
 
-	private boolean isCorsNeeded(ContainerRequest request)
+	/**
+	 * returns whether or not a given request needs CORS header in its response. For example:
+	 * 
+	 * <pre>
+	 * return request.getPath().startsWith(&quot;debug&quot;);
+	 * </pre>
+	 */
+	protected boolean isCorsNeeded(ContainerRequest request)
 	{
-//		return request.getPath().startsWith("debug");
 		return true;
 	}
 }

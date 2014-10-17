@@ -20,6 +20,7 @@ import com.sun.jersey.guice.spi.container.servlet.GuiceContainer;
 public class GuiceRestListener extends GuiceServletContextListener
 {
 	protected final GuiceRestModule module;
+	protected static Injector injector;
 
 	public GuiceRestListener()
 	{
@@ -34,7 +35,16 @@ public class GuiceRestListener extends GuiceServletContextListener
 	@Override
 	protected Injector getInjector()
 	{
-		return Guice.createInjector(module);
+		injector = Guice.createInjector(module);
+		return injector;
+	}
+
+	/**
+	 * given a class, generates an injected instance. Useful when an API call is needed internally.
+	 */
+	public static <T> T getInstance(Class<T> type)
+	{
+		return injector.getInstance(type);
 	}
 
 	public static class GuiceRestModule extends ServletModule
@@ -56,7 +66,8 @@ public class GuiceRestListener extends GuiceServletContextListener
 			String reponseFilters = getResponseFilters();
 			if (reponseFilters != null)
 				initParams.put("com.sun.jersey.spi.container.ContainerResponseFilters", reponseFilters);
-//			initParams.put("com.sun.jersey.config.feature.Trace", "true");
+
+			doCustomJerseyParameters(initParams);
 
 			// route all requests through Guice
 			serve(getServingUrl()).with(GuiceContainer.class, initParams);
@@ -97,7 +108,7 @@ public class GuiceRestListener extends GuiceServletContextListener
 		}
 
 		/**
-		 * override this to return a (comma-delimited) list of Jersey's ContainerResponseFilters
+		 * override this to return a (comma-delimited) list of Jersey's ContainerResponseFilters. By default returns the {@link CorsFilter}.
 		 */
 		protected String getResponseFilters()
 		{
@@ -113,19 +124,33 @@ public class GuiceRestListener extends GuiceServletContextListener
 		}
 
 		/**
-		 * override to perform application-logic bindings, typically between interfaces and concrete implementations
+		 * override to perform application-logic bindings, typically between interfaces and concrete implementations. For example:
+		 * 
+		 * <pre>
+		 * bind(MyIntf.class).to(MyImpl.class);
+		 * </per>
 		 */
 		protected void doCustomBinds()
-		{
-//			bind(MyIntf.class).to(MyImpl.class);
-		}
+		{}
 
 		/**
-		 * override to perform custom (i.e. non-REST) serving through Guice
+		 * override to add additional Guice configuration. For example, to have non-REST servlets served through Guice, use:
+		 * 
+		 * <pre>
+		 * serve(&quot;/my/*&quot;).with(MyServlet.class);
+		 * </pre>
 		 */
 		protected void doCustomServing()
-		{
-//			serve("/my/*").with(MyServlet.class);
-		}
+		{}
+
+		/**
+		 * override to change the context-parameters passed to Jersey's servlet. For example:
+		 * 
+		 * <pre>
+		 * initParams.put(&quot;com.sun.jersey.config.feature.Trace&quot;, &quot;true&quot;);
+		 * </Per>
+		 */
+		protected void doCustomJerseyParameters(Map<String, String> initParams)
+		{}
 	}
 }
