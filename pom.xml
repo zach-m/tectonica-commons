@@ -4,7 +4,7 @@
 
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.1.6</version>
+	<version>0.1.7-SNAPSHOT</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide light solutions for common situations</description>
