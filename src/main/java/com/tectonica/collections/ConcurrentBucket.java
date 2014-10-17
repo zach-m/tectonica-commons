@@ -149,6 +149,15 @@ public class ConcurrentBucket<K, V extends Serializable>
 		 *         true if the method indeed change the entry
 		 */
 		public abstract boolean update(V entry);
+
+		/**
+		 * executes after the persistence has happened and getters are safe to call. however, the entry is still locked at that point and
+		 * can be addressed without any concern that it might have changed elsewhere.
+		 * <p>
+		 * IMPORTANT: do not make any modifications to the entry inside this method
+		 */
+		public void postUpdate(V entry)
+		{}
 	}
 
 	public V update(K key, Updater<V> updater)
@@ -180,6 +189,8 @@ public class ConcurrentBucket<K, V extends Serializable>
 				reindex(key, entry, updatedEntry);
 				entry = updatedEntry;
 			}
+
+			updater.postUpdate(entry);
 
 			return entry;
 		}
