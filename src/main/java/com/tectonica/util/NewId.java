@@ -26,4 +26,12 @@ public class NewId
 
 		return timePart + randomPart;
 	}
+
+	/**
+	 * convenience method for adding prefix to the generated id
+	 */
+	public static String generate(String prefix)
+	{
+		return prefix + generate();
+	}
 }
