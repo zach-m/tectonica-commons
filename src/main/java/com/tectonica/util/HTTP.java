@@ -203,6 +203,18 @@ public class HTTP
 		}
 	}
 
+	public static String urlEncoded(String url)
+	{
+		try
+		{
+			return URLEncoder.encode(url, "UTF-8").replace("+", "%20");
+		}
+		catch (UnsupportedEncodingException e)
+		{
+			return null; // never happens as "UTF-8" is always a valid encoding
+		}
+	}
+
 	private static String streamToContent(InputStream is) throws IOException
 	{
 		BufferedReader in = new BufferedReader(new InputStreamReader(is));
@@ -249,15 +261,7 @@ public class HTTP
 
 	public static HTTP url(String url, boolean encodeUrl)
 	{
-		try
-		{
-			return new HTTP(URLEncoder.encode(url, "UTF-8"));
-		}
-		catch (UnsupportedEncodingException e)
-		{
-			// impossible
-			return null;
-		}
+		return new HTTP(urlEncoded(url));
 	}
 
 	private HTTP(String url)

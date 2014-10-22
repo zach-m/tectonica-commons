@@ -20,6 +20,25 @@ import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.util.ByteArrayDataSource;
 
+/**
+ * Utility class to use JavaMail without the hassle of manually assembling Multipart data. Implemented using the Builder pattern for
+ * easy invocation.
+ * <p>
+ * Examples:
+ * 
+ * <pre>
+ * // send an email with TEXT-only body
+ * EmailSender.subject(&quot;Hello&quot;).to(&quot;a@y.com&quot;).cc(&quot;b@y.com&quot;).text(&quot;body as text&quot;).send();
+ * 
+ * // send an email with HTML + TEXT version of the body
+ * EmailSender.subject(&quot;Hello&quot;).to(&quot;x@y.com&quot;).text(&quot;body as text&quot;).html(&quot;&lt;html&gt;&lt;body&gt;body as html&lt;/body&gt;&lt;/html&gt;&quot;).send();
+ * 
+ * // send an email with HTML body + two attachments
+ * EmailSender.subject(&quot;..&quot;).to(&quot;..&quot;).html(&quot;..&quot;).attach(&quot;my.pdf&quot;, &quot;application/pdf&quot;, pdfBytes).attach(&quot;me.png&quot;, &quot;image/png&quot;, pngBytes).send();
+ * </pre>
+ * 
+ * @author Zach Melamed
+ */
 public class EmailSender
 {
 	private static final String USERNAME = "example@gmail.com"; // change accordingly
