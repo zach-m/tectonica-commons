@@ -1,6 +1,9 @@
 package com.tectonica.gae;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -25,10 +28,13 @@ import com.google.appengine.api.memcache.MemcacheServiceFactory;
  */
 public class GaeMemcacheLock implements Lock
 {
+	private final static MemcacheService mc = MemcacheServiceFactory.getMemcacheService();
+
 	private static final int LOCK_AUTO_EXPIRATION_MS = 30000;
 	private static final long SLEEP_BETWEEN_RETRIES_MS = 50L;
 
 	private final String globalName;
+	private final boolean disposeWhenUnlocked;
 	private final long sleepBetweenRetriesMS;
 	private final ReentrantLock localLock;
 	private ThreadLocal<Integer> globalHoldCount = new ThreadLocal<Integer>()
@@ -40,14 +46,47 @@ public class GaeMemcacheLock implements Lock
 		}
 	};
 
-	public GaeMemcacheLock(String globalName)
+	// //////////////////////////////////////////////////////////////////////////////////////////
+
+	private AtomicInteger refCount = new AtomicInteger(0);
+	private static Map<String, GaeMemcacheLock> locks = new ConcurrentHashMap<>();
+
+	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked)
 	{
-		this(globalName, false, SLEEP_BETWEEN_RETRIES_MS);
+		return getLock(globalName, disposeWhenUnlocked, false, SLEEP_BETWEEN_RETRIES_MS);
 	}
 
-	public GaeMemcacheLock(String globalName, boolean locallyFair, long sleepBetweenRetriesMS)
+	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked, boolean locallyFair, long sleepBetweenRetriesMS)
+	{
+		synchronized (locks)
+		{
+			GaeMemcacheLock lock = locks.get(globalName);
+			if (lock == null)
+				locks.put(globalName, lock = new GaeMemcacheLock(globalName, disposeWhenUnlocked, locallyFair, sleepBetweenRetriesMS));
+			lock.refCount.incrementAndGet();
+			return lock;
+		}
+	}
+
+	public static void disposeLock(String globalName)
+	{
+		synchronized (locks)
+		{
+			GaeMemcacheLock lock = locks.get(globalName);
+			if (lock != null)
+			{
+				if (lock.refCount.decrementAndGet() == 0)
+					locks.remove(globalName);
+			}
+		}
+	}
+
+	// //////////////////////////////////////////////////////////////////////////////////////////
+
+	private GaeMemcacheLock(String globalName, boolean disposeWhenUnlocked, boolean locallyFair, long sleepBetweenRetriesMS)
 	{
 		this.globalName = globalName;
+		this.disposeWhenUnlocked = disposeWhenUnlocked;
 		this.sleepBetweenRetriesMS = sleepBetweenRetriesMS;
 		localLock = new ReentrantLock(locallyFair);
 	}
@@ -77,6 +116,8 @@ public class GaeMemcacheLock implements Lock
 	{
 		unlockGlobally();
 		localLock.unlock();
+		if (disposeWhenUnlocked)
+			disposeLock(globalName);
 	}
 
 	@Override
@@ -154,7 +195,7 @@ public class GaeMemcacheLock implements Lock
 		if (holdCount > 0)
 			acquired = true;
 		else
-			acquired = mc().put(globalName, "X", Expiration.byDeltaMillis(LOCK_AUTO_EXPIRATION_MS), SetPolicy.ADD_ONLY_IF_NOT_PRESENT);
+			acquired = mc.put(globalName, "X", Expiration.byDeltaMillis(LOCK_AUTO_EXPIRATION_MS), SetPolicy.ADD_ONLY_IF_NOT_PRESENT);
 
 		if (acquired)
 			globalHoldCount.set(holdCount + 1);
@@ -171,15 +212,7 @@ public class GaeMemcacheLock implements Lock
 		int holdCount = globalHoldCount.get().intValue() - 1;
 		globalHoldCount.set(holdCount);
 		if (holdCount == 0)
-			mc().delete(globalName);
-	}
-
-	/**
-	 * convenience method
-	 */
-	private final static MemcacheService mc()
-	{
-		return MemcacheServiceFactory.getMemcacheService();
+			mc.delete(globalName);
 	}
 
 	@Override

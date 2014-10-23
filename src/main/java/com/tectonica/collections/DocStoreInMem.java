@@ -2,12 +2,14 @@ package com.tectonica.collections;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.tectonica.collections.ConcurrentMultimap;
 import com.tectonica.util.SerializeUtil;
 
 public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
@@ -54,7 +56,7 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 
 	private final ConcurrentHashMap<K, Document<K, V>> entries;
 	private final ConcurrentHashMap<K, Lock> locks;
-	private final List<Index<K, V, ?>> indices;
+	private final List<InMemIndexImpl<?>> indices;
 
 	public DocStoreInMem(KeyMapper<K, V> keyMapper)
 	{
@@ -65,12 +67,12 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 	}
 
 	@Override
-	public <F> Index<K, V, F> createIndex(IndexMapper<V, F> mapFunc)
+	public <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc)
 	{
 		if (entries.size() > 0)
 			throw new RuntimeException("adding indices on non-empty data set is not supported yet");
 
-		Index<K, V, F> index = new InMemIndexImpl<>(mapFunc);
+		InMemIndexImpl<F> index = new InMemIndexImpl<>(mapFunc, indexName);
 		indices.add(index);
 		return index;
 	}
@@ -94,13 +96,13 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 	}
 
 	@Override
-	protected Set<K> getKeys()
+	protected Set<K> getAllKeys()
 	{
 		return entries.keySet();
 	}
 
 	@Override
-	protected Document<K, V> getDocument(K key)
+	protected Document<K, V> getDocument(K key, DocumentPurpose purpose)
 	{
 		return entries.get(key);
 	}
@@ -112,13 +114,12 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 		Lock existing = locks.putIfAbsent(key, lock = new ReentrantLock());
 		if (existing != null)
 			lock = existing;
-		lock.lock();
 		return lock;
 	}
 
 	private void clearIndices()
 	{
-		for (Index<K, V, ?> index : indices)
+		for (InMemIndexImpl<?> index : indices)
 			index.clear();
 	}
 
@@ -126,7 +127,7 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 	{
 		for (int i = 0; i < indices.size(); i++)
 		{
-			Index<K, V, ?> index = indices.get(i);
+			InMemIndexImpl<?> index = indices.get(i);
 			Object oldField = (oldEntry == null) ? null : index.mapFunc.getIndexedFieldOf(oldEntry);
 			Object newField = index.mapFunc.getIndexedFieldOf(newEntry);
 			boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
@@ -145,35 +146,48 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 	 * 
 	 * @author Zach Melamed
 	 */
-	public static class InMemIndexImpl<K, V, F> extends Index<K, V, F>
+	public class InMemIndexImpl<F> extends Index<K, V, F>
 	{
 		private ConcurrentMultimap<Object, K> dictionary;
 
-		public InMemIndexImpl(IndexMapper<V, F> mapFunc)
+		public InMemIndexImpl(IndexMapper<V, F> mapFunc, String name)
 		{
-			super(mapFunc);
+			super(mapFunc, name);
 			this.dictionary = new ConcurrentMultimap<>();
 		}
 
 		@Override
-		public Set<K> get(F f)
+		public Set<K> getKeysOf(F f)
 		{
 			return dictionary.get(f);
 		}
 
 		@Override
+		public Collection<V> getEntriesOf(F f)
+		{
+			Collection<V> list = new ArrayList<>();
+			Set<K> keys = getKeysOf(f);
+			if (keys == null)
+				return null;
+			for (K key : keys)
+			{
+				Document<K, V> doc = entries.get(key);
+				if (doc != null) // would be very strange if we get null here
+					list.add(doc.get());
+			}
+			return list;
+		}
+
 		protected void map(Object indexField, K toKey)
 		{
 			dictionary.put(indexField, toKey);
 		}
 
-		@Override
 		protected void unMap(Object indexField, K toKey)
 		{
 			dictionary.remove(indexField, toKey);
 		}
 
-		@Override
 		protected void clear()
 		{
 			dictionary.clear();

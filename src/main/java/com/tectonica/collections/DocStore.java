@@ -11,7 +11,7 @@ import java.util.concurrent.locks.Lock;
  * subclasses may be created for many backend persistence engines, including in-memory.
  * <p>
  * The usage of this framework would probably yield the most benefit when used to prototype a data model, where changes are frequent and not
- * backwards-compatible. However, there is absolutely no reason to not use this framework in production. The heavylifting is done by the
+ * backwards-compatible. However, there is absolutely no reason to not use this framework in production. The heavy-lifting is done by the
  * backend database either way.
  * 
  * @author Zach Melamed
@@ -44,12 +44,12 @@ public abstract class DocStore<K, V>
 		void commit(V entry);
 	}
 
-	public static interface KeyMapper<K, V>
+	public interface KeyMapper<K, V>
 	{
 		public K getKeyOf(V value);
 	}
 
-	public static interface IndexMapper<V, F>
+	public interface IndexMapper<V, F>
 	{
 		public F getIndexedFieldOf(V entry);
 	}
@@ -57,27 +57,38 @@ public abstract class DocStore<K, V>
 	public static abstract class Index<K, V, F>
 	{
 		protected final IndexMapper<V, F> mapFunc;
+		protected final String name;
 
-		protected Index(IndexMapper<V, F> mapFunc)
+		protected Index(IndexMapper<V, F> mapFunc, String name)
 		{
 			this.mapFunc = mapFunc;
+			this.name = name;
 		}
 
-		abstract public Set<K> get(F f);
+		abstract public Set<K> getKeysOf(F f);
 
-		public K getFirst(F f)
+		abstract public Collection<V> getEntriesOf(F f);
+
+		public K getFirstKey(F f)
 		{
-			Set<K> set = get(f);
+			Set<K> set = getKeysOf(f);
 			if (set == null || set.size() == 0)
 				return null;
 			return set.iterator().next();
 		}
 
-		abstract protected void map(Object indexField, K toKey);
+		public V getFirstEntry(F f)
+		{
+			Collection<V> list = getEntriesOf(f);
+			if (list == null || list.size() == 0)
+				return null;
+			return list.iterator().next();
+		}
 
-		abstract protected void unMap(Object indexField, K toKey);
-
-		abstract protected void clear();
+		public String getName()
+		{
+			return name;
+		}
 	}
 
 	public static abstract class Updater<V>
@@ -121,6 +132,11 @@ public abstract class DocStore<K, V>
 		{}
 	}
 
+	public static enum DocumentPurpose
+	{
+		READ, MODIFY, REPLACE;
+	}
+
 	// ////////////////////////////////////////////////////////////////////////////////////////////////
 
 	protected final KeyMapper<K, V> keyMapper;
@@ -137,9 +153,14 @@ public abstract class DocStore<K, V>
 		this.keyMapper = keyMapper;
 	}
 
-	protected abstract Set<K> getKeys(); // TODO: maybe needs to be public?
+	protected abstract Set<K> getAllKeys(); // TODO: maybe needs to be public?
 
-	protected abstract Document<K, V> getDocument(K key);
+	/**
+	 * returns a short-lived {@link Document} instance corresponding to the given key, or null if such key doesn't exist. The retrieved
+	 * document is used for a one-time CRUD operation on a key-value pair. Following this method, the returned document will be requested
+	 * for the entry itself (for either read or write purposes).
+	 */
+	protected abstract Document<K, V> getDocument(K key, DocumentPurpose purpose);
 
 	/**
 	 * As only one updater is desired at each given moment, whenever an updater thread starts the (non-atomic) process of updating a
@@ -149,7 +170,7 @@ public abstract class DocStore<K, V>
 
 	// ////////////////////////////////////////////////////////////////////////////////////////////////
 
-	public abstract <F> Index<K, V, F> createIndex(IndexMapper<V, F> mapFunc);
+	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
 
 	public abstract void truncate();
 
@@ -166,9 +187,10 @@ public abstract class DocStore<K, V>
 	public void replace(K key, V entry)
 	{
 		Lock lock = lockForWrite(key);
+		lock.lock();
 		try
 		{
-			Document<K, V> doc = getDocument(key);
+			Document<K, V> doc = getDocument(key, DocumentPurpose.REPLACE);
 			V existing = (doc == null) ? null : doc.get();
 
 			if (existing == null)
@@ -184,7 +206,7 @@ public abstract class DocStore<K, V>
 
 	public V get(K key)
 	{
-		Document<K, V> doc = getDocument(key);
+		Document<K, V> doc = getDocument(key, DocumentPurpose.READ);
 		if (doc == null)
 			return null;
 		return doc.get();
@@ -192,7 +214,7 @@ public abstract class DocStore<K, V>
 
 	public V update(K key, Updater<V> updater)
 	{
-		Document<K, V> doc = getDocument(key);
+		Document<K, V> doc = getDocument(key, DocumentPurpose.MODIFY);
 		if (doc == null)
 		{
 			updater.entryNotFound();
@@ -200,6 +222,7 @@ public abstract class DocStore<K, V>
 		}
 
 		Lock lock = lockForWrite(key);
+		lock.lock();
 		try
 		{
 			V entry = doc.getForWrite();
@@ -239,7 +262,7 @@ public abstract class DocStore<K, V>
 	 */
 	public void updateAll(Updater<V> updater)
 	{
-		updateMultiple(getKeys(), updater);
+		updateMultiple(getAllKeys(), updater);
 	}
 
 	/**
