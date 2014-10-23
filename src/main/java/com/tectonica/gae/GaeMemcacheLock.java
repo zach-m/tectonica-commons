@@ -16,7 +16,7 @@ import com.google.appengine.api.memcache.MemcacheServiceFactory;
  * thread) and minimizes the amount of calls to the Memcache service by having all threads from a single instance share the Memcache
  * polling loop.
  * <p>
- * Locking with Memcache is not a bullet-proof solution, as unexpected eviction of the cache may result it a situation where one instance
+ * Locking with Memcache is not a bullet-proof solution, as unexpected eviction of the cache may result in a situation where one instance
  * acquires a lock that is in fact taken by another. However, the risk is very minimal especially if using the Dedicated Plan from Google
  * (see <a href='https://cloud.google.com/appengine/docs/adminconsole/memcache'>here</a>). Also, a lock entry in Memcache is very unlikely
  * to be evicted due to LRU considerations, as locks are either short-lived or very frequently updated (in high contention).
