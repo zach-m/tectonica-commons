@@ -2,24 +2,24 @@ package com.tectonica.collections;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.tectonica.collections.ConcurrentMultimap;
 import com.tectonica.util.SerializeUtil;
 
 public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore<K, V>
 {
-	protected class InMemDocument implements KeyValue<K, V>
+	protected class InMemKeyValueHandle implements KeyValueHandle<K, V>
 	{
 		private final K _key; // is never null
 		private V _entry; // is never null
 
-		public InMemDocument(K key, V entry)
+		public InMemKeyValueHandle(K key, V entry)
 		{
 			if (key == null || entry == null)
 				throw new NullPointerException();
@@ -40,7 +40,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 
 		@Override
-		public V getForWrite()
+		public V getModifiableValue()
 		{
 			return SerializeUtil.copyOf(_entry); // TODO: replace with a more efficient implementation
 		}
@@ -54,7 +54,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 	}
 
-	private final ConcurrentHashMap<K, KeyValue<K, V>> entries;
+	private final ConcurrentHashMap<K, KeyValueHandle<K, V>> entries;
 	private final ConcurrentHashMap<K, Lock> locks;
 	private final List<InMemIndexImpl<?>> indices;
 
@@ -80,7 +80,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	@Override
 	public void insert(K key, V entry)
 	{
-		KeyValue<K, V> existing = entries.putIfAbsent(key, new InMemDocument(key, entry));
+		KeyValueHandle<K, V> existing = entries.putIfAbsent(key, new InMemKeyValueHandle(key, entry));
 		if (existing == null)
 			reindex(key, null, entry);
 		else
@@ -95,16 +95,61 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		clearIndices();
 	}
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
-	protected Set<K> getAllKeys()
+	public Iterator<KeyValue<K, V>> iterator()
+	{
+		return (Iterator) entries.values().iterator();
+	}
+
+	@Override
+	public Iterator<K> keyIterator()
+	{
+		return entries.keySet().iterator();
+	}
+
+	@Override
+	public Iterator<V> entryIterator()
+	{
+		final Iterator<KeyValue<K, V>> iter = iterator();
+		return new Iterator<V>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
+
+			@Override
+			public V next()
+			{
+				return iter.next().getValue();
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
+	}
+
+	@Override
+	public Set<K> keySet()
 	{
 		return entries.keySet();
 	}
 
 	@Override
-	protected KeyValue<K, V> getKeyValue(K key, Purpose purpose)
+	protected KeyValueHandle<K, V> getHandle(K key, Purpose purpose)
 	{
 		return entries.get(key);
+	}
+
+	@Override
+	protected Iterator<KeyValueHandle<K, V>> getHandles(Set<K> keySet, Purpose purpose)
+	{
+		return super.getHandles(keySet, purpose); // there isn't a more performant solution
 	}
 
 	@Override
@@ -157,25 +202,38 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 
 		@Override
-		public Set<K> getKeysOf(F f)
+		public Iterator<K> keyIteratorOf(F f)
 		{
-			return dictionary.get(f);
+			final Set<K> keySet = dictionary.get(f);
+			if (keySet == null)
+				return Collections.emptyIterator();
+			return keySet.iterator();
 		}
 
 		@Override
-		public Collection<V> getEntriesOf(F f)
+		public Iterator<V> entryIteratorOf(F f)
 		{
-			Collection<V> list = new ArrayList<>();
-			Set<K> keys = getKeysOf(f);
-			if (keys == null)
-				return null;
-			for (K key : keys)
+			final Iterator<K> iter = keyIteratorOf(f);
+			return new Iterator<V>()
 			{
-				KeyValue<K, V> kv = entries.get(key);
-				if (kv != null) // would be very strange if we get null here
-					list.add(kv.getValue());
-			}
-			return list;
+				@Override
+				public boolean hasNext()
+				{
+					return iter.hasNext();
+				}
+
+				@Override
+				public V next()
+				{
+					return entries.get(iter.next()).getValue();
+				}
+
+				@Override
+				public void remove()
+				{
+					throw new UnsupportedOperationException();
+				}
+			};
 		}
 
 		protected void map(Object indexField, K toKey)

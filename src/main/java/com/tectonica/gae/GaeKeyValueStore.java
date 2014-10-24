@@ -2,8 +2,7 @@ package com.tectonica.gae;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
@@ -33,18 +32,20 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	// see: https://cloud.google.com/developers/articles/balancing-strong-and-eventual-consistency-with-google-cloud-datastore/
 	private final Key ancestor;
 
-	private static final String VALUE_PROPERTY_NAME = "value";
+	private static final String COL_NAME_ENTRY_VALUE = "value";
+	private static final String COL_NAME_INDEX_PREFIX = "_i_";
+	private static final String BOGUS_ANCESTOR_KEY_NAME = " ";
 
 	private V entityToEntry(Entity entity)
 	{
-		Blob blob = (Blob) entity.getProperty(VALUE_PROPERTY_NAME);
+		Blob blob = (Blob) entity.getProperty(COL_NAME_ENTRY_VALUE);
 		return SerializeUtil.bytesToObj(blob.getBytes(), entryClass);
 	}
 
 	private Entity entryToEntity(String key, V entry)
 	{
 		Entity entity = new Entity(kind, key, ancestor);
-		entity.setProperty(VALUE_PROPERTY_NAME, new Blob(SerializeUtil.objToBytes(entry)));
+		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(SerializeUtil.objToBytes(entry)));
 		for (int i = 0; i < indices.size(); i++)
 		{
 			GaeIndexImpl<?> index = indices.get(i);
@@ -59,11 +60,11 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		return new Query(kind).setAncestor(ancestor);
 	}
 
-	protected class GaeDocument implements KeyValue<String, V>
+	protected class GaeKeyValueHandler implements KeyValueHandle<String, V>
 	{
 		private final String _key; // is never null
 
-		public GaeDocument(String key)
+		public GaeKeyValueHandler(String key)
 		{
 			if (key == null)
 				throw new NullPointerException();
@@ -93,7 +94,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		}
 
 		@Override
-		public V getForWrite()
+		public V getModifiableValue()
 		{
 			return getValue(); // same implementation, as in both cases we deserialize a new instance
 		}
@@ -114,7 +115,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			throw new NullPointerException();
 		this.entryClass = entryClass;
 		this.kind = entryClass.getSimpleName();
-		this.ancestor = KeyFactory.createKey(kind, " ");
+		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
 		this.indices = new ArrayList<>();
 	}
 
@@ -129,7 +130,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	@Override
 	public void insert(String key, V entry)
 	{
-		GaeDocument kv = new GaeDocument(key);
+		GaeKeyValueHandler kv = new GaeKeyValueHandler(key);
 		kv.commit(entry);
 	}
 
@@ -141,23 +142,117 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	}
 
 	@Override
-	protected Set<String> getAllKeys()
+	public Iterator<KeyValue<String, V>> iterator()
 	{
-		return keysOfQuery(newQuery().setKeysOnly());
-	}
+		final Iterator<Entity> iter = ds.prepare(newQuery()).asIterator();
+		return new Iterator<KeyValue<String, V>>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
 
-	private Set<String> keysOfQuery(Query q)
-	{
-		Set<String> keySet = new HashSet<>();
-		for (Entity entity : ds.prepare(q).asIterable())
-			keySet.add(entity.getKey().getName());
-		return keySet;
+			@Override
+			public KeyValue<String, V> next()
+			{
+				final Entity entity = iter.next();
+				return new KeyValue<String, V>()
+				{
+					@Override
+					public String getKey()
+					{
+						return entity.getKey().getName();
+					}
+
+					@Override
+					public V getValue()
+					{
+						return entityToEntry(entity);
+					}
+				};
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
 	}
 
 	@Override
-	protected KeyValue<String, V> getKeyValue(String key, Purpose purpose)
+	public Iterator<String> keyIterator()
 	{
-		return new GaeDocument(key);
+		return keyIteratorOfQuery(newQuery().setKeysOnly());
+	}
+
+	private Iterator<String> keyIteratorOfQuery(Query q)
+	{
+		final Iterator<Entity> iter = ds.prepare(q).asIterator();
+		return new Iterator<String>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
+
+			@Override
+			public String next()
+			{
+				return iter.next().getKey().getName();
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
+	}
+
+	@Override
+	public Iterator<V> entryIterator()
+	{
+		return entryIteratorOfQuery(newQuery());
+	}
+
+	private Iterator<V> entryIteratorOfQuery(Query q)
+	{
+		final Iterator<Entity> iter = ds.prepare(q).asIterator();
+		return new Iterator<V>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
+
+			@Override
+			public V next()
+			{
+				return entityToEntry(iter.next());
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
+	}
+
+	@Override
+	protected KeyValueHandle<String, V> getHandle(String key, Purpose purpose)
+	{
+		return new GaeKeyValueHandler(key);
+	}
+
+	@Override
+	protected Iterator<KeyValueHandle<String, V>> getHandles(Set<String> keySet, Purpose purpose)
+	{
+		return super.getHandles(keySet, purpose); // TODO: in READ scenarios, we can pre-fetch all keys in a single roundtrip
 	}
 
 	@Override
@@ -181,26 +276,26 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 				throw new RuntimeException("index name is mandatory in " + GaeIndexImpl.class.getSimpleName());
 		}
 
-		@Override
-		public Set<String> getKeysOf(F f)
+		public Iterator<String> keyIteratorOf(F f)
 		{
-			Filter filter = new FilterPredicate(propertyName(), FilterOperator.EQUAL, f);
-			return keysOfQuery(newQuery().setFilter(filter).setKeysOnly());
+			return keyIteratorOfQuery(newIndexQuery(f).setKeysOnly());
 		}
 
 		@Override
-		public Collection<V> getEntriesOf(F f)
+		public Iterator<V> entryIteratorOf(F f)
 		{
-			Collection<V> entries = new ArrayList<>();
+			return entryIteratorOfQuery(newIndexQuery(f));
+		}
+
+		private Query newIndexQuery(F f)
+		{
 			Filter filter = new FilterPredicate(propertyName(), FilterOperator.EQUAL, f);
-			for (Entity entity : ds.prepare(newQuery().setFilter(filter)).asIterable())
-				entries.add(entityToEntry(entity));
-			return entries;
+			return newQuery().setFilter(filter);
 		}
 
 		private String propertyName()
 		{
-			return "_i_" + name;
+			return COL_NAME_INDEX_PREFIX + name;
 		}
 
 		private F getIndexedFieldOf(V entry)
