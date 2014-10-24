@@ -12,9 +12,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.tectonica.collections.ConcurrentMultimap;
 import com.tectonica.util.SerializeUtil;
 
-public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
+public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore<K, V>
 {
-	protected class InMemDocument implements Document<K, V>
+	protected class InMemDocument implements KeyValue<K, V>
 	{
 		private final K _key; // is never null
 		private V _entry; // is never null
@@ -34,7 +34,7 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 		}
 
 		@Override
-		public V get()
+		public V getValue()
 		{
 			return _entry;
 		}
@@ -54,11 +54,11 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 		}
 	}
 
-	private final ConcurrentHashMap<K, Document<K, V>> entries;
+	private final ConcurrentHashMap<K, KeyValue<K, V>> entries;
 	private final ConcurrentHashMap<K, Lock> locks;
 	private final List<InMemIndexImpl<?>> indices;
 
-	public DocStoreInMem(KeyMapper<K, V> keyMapper)
+	public InMemKeyValueStore(KeyMapper<K, V> keyMapper)
 	{
 		super(keyMapper);
 		this.entries = new ConcurrentHashMap<>();
@@ -80,7 +80,7 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 	@Override
 	public void insert(K key, V entry)
 	{
-		Document<K, V> existing = entries.putIfAbsent(key, new InMemDocument(key, entry));
+		KeyValue<K, V> existing = entries.putIfAbsent(key, new InMemDocument(key, entry));
 		if (existing == null)
 			reindex(key, null, entry);
 		else
@@ -102,13 +102,13 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 	}
 
 	@Override
-	protected Document<K, V> getDocument(K key, DocumentPurpose purpose)
+	protected KeyValue<K, V> getKeyValue(K key, Purpose purpose)
 	{
 		return entries.get(key);
 	}
 
 	@Override
-	public Lock lockForWrite(K key)
+	public Lock getWriteLock(K key)
 	{
 		Lock lock;
 		Lock existing = locks.putIfAbsent(key, lock = new ReentrantLock());
@@ -171,9 +171,9 @@ public class DocStoreInMem<K, V extends Serializable> extends DocStore<K, V>
 				return null;
 			for (K key : keys)
 			{
-				Document<K, V> doc = entries.get(key);
-				if (doc != null) // would be very strange if we get null here
-					list.add(doc.get());
+				KeyValue<K, V> kv = entries.get(key);
+				if (kv != null) // would be very strange if we get null here
+					list.add(kv.getValue());
 			}
 			return list;
 		}

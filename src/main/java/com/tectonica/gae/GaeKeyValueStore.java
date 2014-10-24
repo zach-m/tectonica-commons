@@ -19,10 +19,10 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.Filter;
 import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
-import com.tectonica.collections.DocStore;
+import com.tectonica.collections.KeyValueStore;
 import com.tectonica.util.SerializeUtil;
 
-public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
+public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
 {
 	private static DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
 
@@ -59,7 +59,7 @@ public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
 		return new Query(kind).setAncestor(ancestor);
 	}
 
-	protected class GaeDocument implements Document<String, V>
+	protected class GaeDocument implements KeyValue<String, V>
 	{
 		private final String _key; // is never null
 
@@ -77,7 +77,7 @@ public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
 		}
 
 		@Override
-		public V get()
+		public V getValue()
 		{
 			Entity entity;
 			try
@@ -95,7 +95,7 @@ public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
 		@Override
 		public V getForWrite()
 		{
-			return get(); // same implementation, as in both cases we deserialize a new instance
+			return getValue(); // same implementation, as in both cases we deserialize a new instance
 		}
 
 		@Override
@@ -107,7 +107,7 @@ public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
 
 	private final List<GaeIndexImpl<?>> indices;
 
-	public DocStoreGae(Class<V> entryClass, KeyMapper<String, V> keyMapper)
+	public GaeKeyValueStore(Class<V> entryClass, KeyMapper<String, V> keyMapper)
 	{
 		super(keyMapper);
 		if (entryClass == null)
@@ -129,8 +129,8 @@ public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
 	@Override
 	public void insert(String key, V entry)
 	{
-		GaeDocument doc = new GaeDocument(key);
-		doc.commit(entry);
+		GaeDocument kv = new GaeDocument(key);
+		kv.commit(entry);
 	}
 
 	@Override
@@ -155,13 +155,13 @@ public class DocStoreGae<V extends Serializable> extends DocStore<String, V>
 	}
 
 	@Override
-	protected Document<String, V> getDocument(String key, DocumentPurpose purpose)
+	protected KeyValue<String, V> getKeyValue(String key, Purpose purpose)
 	{
 		return new GaeDocument(key);
 	}
 
 	@Override
-	public Lock lockForWrite(String key)
+	public Lock getWriteLock(String key)
 	{
 		return GaeMemcacheLock.getLock(kind + ":" + key, true);
 	}

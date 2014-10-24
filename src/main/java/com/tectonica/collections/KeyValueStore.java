@@ -5,31 +5,31 @@ import java.util.Set;
 import java.util.concurrent.locks.Lock;
 
 /**
- * Simple, yet powerful, framework (and approach) for handling a key-value store. It allows for multiple concurrent readers yet a single
- * concurrent writer of each entry. It also provides a read-before-update mechanism which makes life simpler and data more consistent.
- * Indexing is also supported as part of the framework. The interface is intuitive and straitforward.The class itself is abstract and
- * subclasses may be created for many backend persistence engines, including in-memory.
+ * Simple, yet powerful, framework (and approach) for handling a key-value store. It allows for multiple concurrent readers but a single
+ * concurrent writer of each entry. It also provides a read-before-update mechanism which makes life simpler and keeps data consistent.
+ * Indexing is also supported as part of the framework. The interface is intuitive and straightforward. This class itself is abstract and
+ * subclasses are included for several backend persistence engines, including in-memory. (which is great for development).
  * <p>
  * The usage of this framework would probably yield the most benefit when used to prototype a data model, where changes are frequent and not
- * backwards-compatible. However, there is absolutely no reason to not use this framework in production. The heavy-lifting is done by the
+ * backwards-compatible. However, in more than a few scenarios, this framework can be used in production. The heavy-lifting is done by the
  * backend database either way.
  * 
  * @author Zach Melamed
  */
-public abstract class DocStore<K, V>
+public abstract class KeyValueStore<K, V>
 {
-	public interface Document<K, V>
+	public interface KeyValue<K, V>
 	{
 		K getKey();
 
 		/**
-		 * returns the actual data of the document
+		 * returns the actual data of the document (the "value" of the key-value)
 		 */
-		V get();
+		V getValue();
 
 		/**
-		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #get()} will return the
-		 * unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process,
+		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #getValue()} will return
+		 * the unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process, the method
 		 * {@link #commit(Object)} will be invoked.
 		 * <p>
 		 * NOTE: this method is called only on a locked document
@@ -37,7 +37,8 @@ public abstract class DocStore<K, V>
 		V getForWrite();
 
 		/**
-		 * Makes the changes to a document permanent. After this method finishes, calls to {@link #get()} will return the updated document.
+		 * Makes the changes to a document permanent. After this method finishes, calls to {@link #getValue()} will return the updated
+		 * document.
 		 * <p>
 		 * NOTE: this method is called only on a locked document
 		 */
@@ -107,7 +108,7 @@ public abstract class DocStore<K, V>
 		}
 
 		/**
-		 * method inside which an entry may be safely modified
+		 * method inside which an entry may be safely modified with no concurrency concerns
 		 * 
 		 * @param entry
 		 *            thread-safe entry on which the modifications are to be performed. never a null.
@@ -126,13 +127,13 @@ public abstract class DocStore<K, V>
 		{}
 
 		/**
-		 * called if an update process was requested for a non existing key
+		 * called if an update process was requested on a non existing key
 		 */
 		public void entryNotFound()
 		{}
 	}
 
-	public static enum DocumentPurpose
+	public static enum Purpose
 	{
 		READ, MODIFY, REPLACE;
 	}
@@ -148,7 +149,7 @@ public abstract class DocStore<K, V>
 	 *            this optional parameter is suitable for situations where the key of an entry can be inferred from it directly
 	 *            (alternatively, the key and value can be stored separately). when provided, several convenience methods become applicable
 	 */
-	public DocStore(KeyMapper<K, V> keyMapper)
+	public KeyValueStore(KeyMapper<K, V> keyMapper)
 	{
 		this.keyMapper = keyMapper;
 	}
@@ -156,17 +157,17 @@ public abstract class DocStore<K, V>
 	protected abstract Set<K> getAllKeys(); // TODO: maybe needs to be public?
 
 	/**
-	 * returns a short-lived {@link Document} instance corresponding to the given key, or null if such key doesn't exist. The retrieved
+	 * returns a short-lived {@link KeyValue} instance corresponding to the given key, or null if such key doesn't exist. The retrieved
 	 * document is used for a one-time CRUD operation on a key-value pair. Following this method, the returned document will be requested
 	 * for the entry itself (for either read or write purposes).
 	 */
-	protected abstract Document<K, V> getDocument(K key, DocumentPurpose purpose);
+	protected abstract KeyValue<K, V> getKeyValue(K key, Purpose purpose);
 
 	/**
 	 * As only one updater is desired at each given moment, whenever an updater thread starts the (non-atomic) process of updating a
 	 * document, all other attempts (globally, of course, not just on a single machine) should be blocked
 	 */
-	protected abstract Lock lockForWrite(K key);
+	protected abstract Lock getWriteLock(K key);
 
 	// ////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -186,17 +187,15 @@ public abstract class DocStore<K, V>
 	 */
 	public void replace(K key, V entry)
 	{
-		Lock lock = lockForWrite(key);
+		Lock lock = getWriteLock(key);
 		lock.lock();
 		try
 		{
-			Document<K, V> doc = getDocument(key, DocumentPurpose.REPLACE);
-			V existing = (doc == null) ? null : doc.get();
-
-			if (existing == null)
+			KeyValue<K, V> kv = getKeyValue(key, Purpose.REPLACE);
+			if (kv == null)
 				insert(key, entry);
 			else
-				doc.commit(entry);
+				kv.commit(entry);
 		}
 		finally
 		{
@@ -206,26 +205,26 @@ public abstract class DocStore<K, V>
 
 	public V get(K key)
 	{
-		Document<K, V> doc = getDocument(key, DocumentPurpose.READ);
-		if (doc == null)
+		KeyValue<K, V> kv = getKeyValue(key, Purpose.READ);
+		if (kv == null)
 			return null;
-		return doc.get();
+		return kv.getValue();
 	}
 
 	public V update(K key, Updater<V> updater)
 	{
-		Document<K, V> doc = getDocument(key, DocumentPurpose.MODIFY);
-		if (doc == null)
+		KeyValue<K, V> kv = getKeyValue(key, Purpose.MODIFY);
+		if (kv == null)
 		{
 			updater.entryNotFound();
 			return null;
 		}
 
-		Lock lock = lockForWrite(key);
+		Lock lock = getWriteLock(key);
 		lock.lock();
 		try
 		{
-			V entry = doc.getForWrite();
+			V entry = kv.getForWrite();
 			if (entry == null)
 			{
 				updater.entryNotFound();
@@ -235,7 +234,7 @@ public abstract class DocStore<K, V>
 			updater.changed = updater.update(entry);
 
 			if (updater.changed)
-				doc.commit(entry);
+				kv.commit(entry);
 
 			updater.postCommit(entry);
 
