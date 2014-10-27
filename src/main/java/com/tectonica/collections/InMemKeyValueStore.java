@@ -10,21 +10,41 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.tectonica.collections.ConcurrentMultimap;
 import com.tectonica.util.SerializeUtil;
 
 public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore<K, V>
 {
-	protected class InMemKeyValueHandle implements KeyValueHandle<K, V>
-	{
-		private final K _key; // is never null
-		private V _entry; // is never null
+	private final ConcurrentHashMap<K, InMemEntry> entries;
+	private final ConcurrentHashMap<K, Lock> locks;
+	private final List<InMemIndexImpl<?>> indexes;
 
-		public InMemKeyValueHandle(K key, V entry)
+	/**
+	 * creates an in-memory data store, suitable mostly for development.
+	 * 
+	 * @param keyMapper
+	 *            this optional parameter is suitable in situations where the key of an entry can be inferred from its value directly
+	 *            (as opposed to when the key and value are stored separately). when provided, several convenience methods become applicable
+	 */
+	public InMemKeyValueStore(KeyMapper<K, V> keyMapper)
+	{
+		super(keyMapper);
+		this.entries = new ConcurrentHashMap<>();
+		this.locks = new ConcurrentHashMap<>();
+		this.indexes = new ArrayList<>();
+	}
+
+	protected class InMemEntry implements Modifier<K, V>, KeyValue<K, V>
+	{
+		private final K _key; // never null
+		private V _value; // never null
+
+		public InMemEntry(K key, V value)
 		{
-			if (key == null || entry == null)
+			if (key == null || value == null)
 				throw new NullPointerException();
 			_key = key;
-			_entry = entry;
+			_value = value;
 		}
 
 		@Override
@@ -36,70 +56,37 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		@Override
 		public V getValue()
 		{
-			return _entry;
+			return _value;
 		}
 
 		@Override
 		public V getModifiableValue()
 		{
-			return SerializeUtil.copyOf(_entry); // TODO: replace with a more efficient implementation
+			return SerializeUtil.copyOf(_value); // TODO: replace with a more efficient implementation
 		}
 
 		@Override
-		public void commit(V entry)
+		public void commit(V value)
 		{
-			V oldEntry = _entry;
-			_entry = entry;
-			reindex(_key, oldEntry, entry);
-		}
-		
-		@Override
-		public void delete()
-		{
-			entries.remove(_key);
-			reindex(_key, _entry, null);
+			V oldEntry = _value;
+			_value = value;
+			reindex(_key, oldEntry, value);
 		}
 	}
 
-	private final ConcurrentHashMap<K, KeyValueHandle<K, V>> entries;
-	private final ConcurrentHashMap<K, Lock> locks;
-	private final List<InMemIndexImpl<?>> indices;
-
-	public InMemKeyValueStore(KeyMapper<K, V> keyMapper)
-	{
-		super(keyMapper);
-		this.entries = new ConcurrentHashMap<>();
-		this.locks = new ConcurrentHashMap<>();
-		this.indices = new ArrayList<>();
-	}
+	/***********************************************************************************
+	 * 
+	 * GETTERS
+	 *
+	 ***********************************************************************************/
 
 	@Override
-	public <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc)
+	public V get(K key)
 	{
-		if (entries.size() > 0)
-			throw new RuntimeException("adding indices on non-empty data set is not supported yet");
-
-		InMemIndexImpl<F> index = new InMemIndexImpl<>(mapFunc, indexName);
-		indices.add(index);
-		return index;
-	}
-
-	@Override
-	public void insert(K key, V entry)
-	{
-		KeyValueHandle<K, V> existing = entries.putIfAbsent(key, new InMemKeyValueHandle(key, entry));
-		if (existing == null)
-			reindex(key, null, entry);
-		else
-			throw new RuntimeException("attempted to insert entry with existing key " + key);
-	}
-
-	@Override
-	public void truncate()
-	{
-		entries.clear();
-		locks.clear();
-		clearIndices();
+		KeyValue<K, V> kv = entries.get(key);
+		if (kv == null)
+			return null;
+		return kv.getValue();
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -116,29 +103,16 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	}
 
 	@Override
-	public Iterator<V> entryIterator()
+	public Iterator<KeyValue<K, V>> iteratorFor(Set<K> keySet)
 	{
-		final Iterator<KeyValue<K, V>> iter = iterator();
-		return new Iterator<V>()
+		List<KeyValue<K, V>> list = new ArrayList<>();
+		for (K key : keySet)
 		{
-			@Override
-			public boolean hasNext()
-			{
-				return iter.hasNext();
-			}
-
-			@Override
-			public V next()
-			{
-				return iter.next().getValue();
-			}
-
-			@Override
-			public void remove()
-			{
-				throw new UnsupportedOperationException();
-			}
-		};
+			KeyValue<K, V> kv = entries.get(key);
+			if (kv != null)
+				list.add(kv);
+		}
+		return list.iterator();
 	}
 
 	@Override
@@ -147,20 +121,20 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		return entries.keySet();
 	}
 
+	/***********************************************************************************
+	 * 
+	 * SETTERS (UTILS)
+	 *
+	 ***********************************************************************************/
+
 	@Override
-	protected KeyValueHandle<K, V> getHandle(K key, Purpose purpose)
+	protected Modifier<K, V> getModifier(K key, ModificationType purpose)
 	{
 		return entries.get(key);
 	}
 
 	@Override
-	protected Iterator<KeyValueHandle<K, V>> getHandles(Set<K> keySet, Purpose purpose)
-	{
-		return super.getHandles(keySet, purpose); // there isn't a more performant solution
-	}
-
-	@Override
-	public Lock getWriteLock(K key)
+	public Lock getModificationLock(K key)
 	{
 		Lock lock;
 		Lock existing = locks.putIfAbsent(key, lock = new ReentrantLock());
@@ -169,28 +143,68 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		return lock;
 	}
 
-	private void clearIndices()
+	/***********************************************************************************
+	 * 
+	 * SETTERS
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	public void insert(K key, V value)
 	{
-		for (InMemIndexImpl<?> index : indices)
-			index.clear();
+		Modifier<K, V> existing = entries.putIfAbsent(key, new InMemEntry(key, value));
+		if (existing == null)
+			reindex(key, null, value);
+		else
+			throw new RuntimeException("attempted to insert entry with existing key " + key);
 	}
 
-	private void reindex(K key, V oldEntry, V newEntry)
+	/***********************************************************************************
+	 * 
+	 * DELETERS
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	public void delete(K key)
 	{
-		for (int i = 0; i < indices.size(); i++)
+		if (indexes.size() == 0)
+			entries.remove(key); // without indexes to update, this is a primitive operation
+		else
 		{
-			InMemIndexImpl<?> index = indices.get(i);
-			Object oldField = (oldEntry == null) ? null : index.mapFunc.getIndexedFieldOf(oldEntry);
-			Object newField = (newEntry == null) ? null : index.mapFunc.getIndexedFieldOf(newEntry);
-			boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
-			if (valueChanged)
+			KeyValue<K, V> kv = entries.get(key);
+			if (kv != null)
 			{
-				if (oldField != null)
-					index.unMap(oldField, key);
-				if (newField != null)
-					index.map(newField, key);
+				V oldValue = kv.getValue();
+				entries.remove(key);
+				reindex(key, oldValue, null);
 			}
 		}
+	}
+
+	@Override
+	public void truncate()
+	{
+		entries.clear();
+		locks.clear();
+		clearIndices();
+	}
+
+	/***********************************************************************************
+	 * 
+	 * INDEXES
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	public <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapper)
+	{
+		if (entries.size() > 0)
+			throw new RuntimeException("adding indexes on non-empty data set is not supported yet");
+
+		InMemIndexImpl<F> index = new InMemIndexImpl<>(mapper, indexName);
+		indexes.add(index);
+		return index;
 	}
 
 	/**
@@ -202,23 +216,23 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	{
 		private ConcurrentMultimap<Object, K> dictionary;
 
-		public InMemIndexImpl(IndexMapper<V, F> mapFunc, String name)
+		public InMemIndexImpl(IndexMapper<V, F> mapper, String name)
 		{
-			super(mapFunc, name);
+			super(mapper, name);
 			this.dictionary = new ConcurrentMultimap<>();
 		}
 
 		@Override
 		public Iterator<K> keyIteratorOf(F f)
 		{
-			final Set<K> keySet = dictionary.get(f);
+			Set<K> keySet = dictionary.get(f);
 			if (keySet == null)
 				return Collections.emptyIterator();
 			return keySet.iterator();
 		}
 
 		@Override
-		public Iterator<V> entryIteratorOf(F f)
+		public Iterator<V> valueIteratorOf(F f)
 		{
 			final Iterator<K> iter = keyIteratorOf(f);
 			return new Iterator<V>()
@@ -256,6 +270,30 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		protected void clear()
 		{
 			dictionary.clear();
+		}
+	}
+
+	private void clearIndices()
+	{
+		for (InMemIndexImpl<?> index : indexes)
+			index.clear();
+	}
+
+	private void reindex(K key, V oldEntry, V newEntry)
+	{
+		for (int i = 0; i < indexes.size(); i++)
+		{
+			InMemIndexImpl<?> index = indexes.get(i);
+			Object oldField = (oldEntry == null) ? null : index.mapper.getIndexedFieldOf(oldEntry);
+			Object newField = (newEntry == null) ? null : index.mapper.getIndexedFieldOf(newEntry);
+			boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
+			if (valueChanged)
+			{
+				if (oldField != null)
+					index.unMap(oldField, key);
+				if (newField != null)
+					index.map(newField, key);
+			}
 		}
 	}
 }

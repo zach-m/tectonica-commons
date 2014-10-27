@@ -25,119 +25,120 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 {
 	private static DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
 
-	private final Class<V> entryClass;
+	private final Class<V> valueClass;
 	private final String kind;
+	private final Key ancestor; // dummy parent for all entities to guarantee Datastore consistency
+	private final List<GaeIndexImpl<?>> indexes;
 
-	// the Datastore guarantees strong consistency in ancestral queries. we create a bogus parent for all entities.
-	// see: https://cloud.google.com/developers/articles/balancing-strong-and-eventual-consistency-with-google-cloud-datastore/
-	private final Key ancestor;
-
-	private static final String COL_NAME_ENTRY_VALUE = "value";
-	private static final String COL_NAME_INDEX_PREFIX = "_i_";
-	private static final String BOGUS_ANCESTOR_KEY_NAME = " ";
-
-	private V entityToEntry(Entity entity)
-	{
-		Blob blob = (Blob) entity.getProperty(COL_NAME_ENTRY_VALUE);
-		return SerializeUtil.bytesToObj(blob.getBytes(), entryClass);
-	}
-
-	private Entity entryToEntity(String key, V entry)
-	{
-		Entity entity = new Entity(kind, key, ancestor);
-		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(SerializeUtil.objToBytes(entry)));
-		for (int i = 0; i < indices.size(); i++)
-		{
-			GaeIndexImpl<?> index = indices.get(i);
-			Object field = (entry == null) ? null : index.getIndexedFieldOf(entry);
-			entity.setProperty(index.propertyName(), field);
-		}
-		return entity;
-	}
-
-	private Query newQuery()
-	{
-		return new Query(kind).setAncestor(ancestor);
-	}
-
-	protected class GaeKeyValueHandler implements KeyValueHandle<String, V>
-	{
-		private final String _key; // is never null
-
-		public GaeKeyValueHandler(String key)
-		{
-			if (key == null)
-				throw new NullPointerException();
-			_key = key;
-		}
-
-		@Override
-		public String getKey()
-		{
-			return _key;
-		}
-
-		@Override
-		public V getValue()
-		{
-			Entity entity;
-			try
-			{
-				// lookup-by-key is always strongly consistent in the Datastore
-				entity = ds.get(KeyFactory.createKey(ancestor, kind, _key));
-				return entityToEntry(entity);
-			}
-			catch (EntityNotFoundException e)
-			{
-				return null;
-			}
-		}
-
-		@Override
-		public V getModifiableValue()
-		{
-			return getValue(); // same implementation, as in both cases we deserialize a new instance
-		}
-
-		@Override
-		public void commit(V entry)
-		{
-			ds.put(entryToEntity(_key, entry));
-		}
-
-		@Override
-		public void delete()
-		{
-			ds.delete(KeyFactory.createKey(ancestor, kind, _key));
-		}
-	}
-
-	private final List<GaeIndexImpl<?>> indices;
-
-	public GaeKeyValueStore(Class<V> entryClass, KeyMapper<String, V> keyMapper)
+	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper)
 	{
 		super(keyMapper);
-		if (entryClass == null)
+		if (valueClass == null)
 			throw new NullPointerException();
-		this.entryClass = entryClass;
-		this.kind = entryClass.getSimpleName();
+		this.valueClass = valueClass;
+		this.kind = valueClass.getSimpleName();
 		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
-		this.indices = new ArrayList<>();
+		this.indexes = new ArrayList<>();
+	}
+
+	/***********************************************************************************
+	 * 
+	 * GETTERS
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	public V get(String key)
+	{
+		try
+		{
+			return entityToValue(ds.get(KeyFactory.createKey(ancestor, kind, key)));
+		}
+		catch (EntityNotFoundException e)
+		{
+			return null;
+		}
 	}
 
 	@Override
-	public <F> Index<String, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc)
+	public Iterator<KeyValue<String, V>> iterator()
 	{
-		GaeIndexImpl<F> index = new GaeIndexImpl<>(mapFunc, indexName);
-		indices.add(index);
-		return index;
+		return entryIteratorOfQuery(newQuery()); // query without filters = all
 	}
 
 	@Override
-	public void insert(String key, V entry)
+	public Iterator<String> keyIterator()
 	{
-		GaeKeyValueHandler kv = new GaeKeyValueHandler(key);
-		kv.commit(entry);
+		return keyIteratorOfQuery(newQuery().setKeysOnly());
+	}
+
+	@Override
+	public Iterator<V> valueIterator()
+	{
+		return valueIteratorOfQuery(newQuery());
+	}
+
+	@Override
+	public Iterator<KeyValue<String, V>> iteratorFor(Set<String> keySet)
+	{
+		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, keySet);
+		return entryIteratorOfQuery(newQuery().setFilter(filter));
+	}
+
+	/***********************************************************************************
+	 * 
+	 * SETTERS (UTILS)
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	protected Modifier<String, V> getModifier(final String key, ModificationType purpose)
+	{
+		// insert, replace and update are all treated the same in GAE: all simply do save()
+		return new Modifier<String, V>()
+		{
+			@Override
+			public V getModifiableValue()
+			{
+				return get(key); // same implementation as read-only get, as in both cases we deserialize a new instance
+			}
+
+			@Override
+			public void commit(V value)
+			{
+				save(key, value);
+			}
+		};
+	}
+
+	@Override
+	public Lock getModificationLock(String key)
+	{
+		return GaeMemcacheLock.getLock(kind + ":" + key, true);
+	}
+
+	/***********************************************************************************
+	 * 
+	 * SETTERS
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	public void insert(String key, V value)
+	{
+		save(key, value);
+	}
+
+	/***********************************************************************************
+	 * 
+	 * DELETERS
+	 *
+	 ***********************************************************************************/
+
+	@Override
+	public void delete(String key)
+	{
+		ds.delete(KeyFactory.createKey(ancestor, kind, key));
 	}
 
 	@Override
@@ -147,10 +148,105 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			ds.delete(entity.getKey());
 	}
 
+	/***********************************************************************************
+	 * 
+	 * INDEXES
+	 *
+	 ***********************************************************************************/
+
 	@Override
-	public Iterator<KeyValue<String, V>> iterator()
+	public <F> Index<String, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc)
 	{
-		final Iterator<Entity> iter = ds.prepare(newQuery()).asIterator();
+		GaeIndexImpl<F> index = new GaeIndexImpl<>(mapFunc, indexName);
+		indexes.add(index);
+		return index;
+	}
+
+	/**
+	 * GAE implementation of an index - simply exposes the Datastore property filters
+	 * 
+	 * @author Zach Melamed
+	 */
+	public class GaeIndexImpl<F> extends Index<String, V, F>
+	{
+		public GaeIndexImpl(IndexMapper<V, F> mapFunc, String name)
+		{
+			super(mapFunc, name);
+
+			if (name == null || name.isEmpty())
+				throw new RuntimeException("index name is mandatory in " + GaeIndexImpl.class.getSimpleName());
+		}
+
+		public Iterator<String> keyIteratorOf(F f)
+		{
+			return keyIteratorOfQuery(newIndexQuery(f).setKeysOnly());
+		}
+
+		@Override
+		public Iterator<V> valueIteratorOf(F f)
+		{
+			return valueIteratorOfQuery(newIndexQuery(f));
+		}
+
+		private Query newIndexQuery(F f)
+		{
+			Filter filter = new FilterPredicate(propertyName(), FilterOperator.EQUAL, f);
+			return newQuery().setFilter(filter);
+		}
+
+		private String propertyName()
+		{
+			return COL_NAME_INDEX_PREFIX + name;
+		}
+
+		private F getIndexedFieldOf(V value)
+		{
+			return mapper.getIndexedFieldOf(value);
+		}
+	}
+
+	/***********************************************************************************
+	 * 
+	 * DATASTORE UTILS
+	 *
+	 ***********************************************************************************/
+
+	private static final String COL_NAME_ENTRY_VALUE = "value";
+	private static final String COL_NAME_INDEX_PREFIX = "_i_";
+	private static final String BOGUS_ANCESTOR_KEY_NAME = " ";
+
+	private V entityToValue(Entity entity)
+	{
+		Blob blob = (Blob) entity.getProperty(COL_NAME_ENTRY_VALUE);
+		return SerializeUtil.bytesToObj(blob.getBytes(), valueClass);
+	}
+
+	private Entity entryToEntity(String key, V value)
+	{
+		Entity entity = new Entity(kind, key, ancestor);
+		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(SerializeUtil.objToBytes(value)));
+		for (int i = 0; i < indexes.size(); i++)
+		{
+			GaeIndexImpl<?> index = indexes.get(i);
+			Object field = (value == null) ? null : index.getIndexedFieldOf(value);
+			entity.setProperty(index.propertyName(), field);
+		}
+		return entity;
+	}
+
+	private void save(String key, V value)
+	{
+		ds.put(entryToEntity(key, value));
+	}
+
+	private Query newQuery()
+	{
+		return new Query(kind).setAncestor(ancestor);
+	}
+
+	private Iterator<KeyValue<String, V>> entryIteratorOfQuery(Query q)
+	{
+		final Iterator<Entity> iter = ds.prepare(q).asIterator();
 		return new Iterator<KeyValue<String, V>>()
 		{
 			@Override
@@ -174,7 +270,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 					@Override
 					public V getValue()
 					{
-						return entityToEntry(entity);
+						return entityToValue(entity);
 					}
 				};
 			}
@@ -185,12 +281,6 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 				throw new UnsupportedOperationException();
 			}
 		};
-	}
-
-	@Override
-	public Iterator<String> keyIterator()
-	{
-		return keyIteratorOfQuery(newQuery().setKeysOnly());
 	}
 
 	private Iterator<String> keyIteratorOfQuery(Query q)
@@ -218,13 +308,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		};
 	}
 
-	@Override
-	public Iterator<V> entryIterator()
-	{
-		return entryIteratorOfQuery(newQuery());
-	}
-
-	private Iterator<V> entryIteratorOfQuery(Query q)
+	private Iterator<V> valueIteratorOfQuery(Query q)
 	{
 		final Iterator<Entity> iter = ds.prepare(q).asIterator();
 		return new Iterator<V>()
@@ -238,7 +322,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			@Override
 			public V next()
 			{
-				return entityToEntry(iter.next());
+				return entityToValue(iter.next());
 			}
 
 			@Override
@@ -247,66 +331,5 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 				throw new UnsupportedOperationException();
 			}
 		};
-	}
-
-	@Override
-	protected KeyValueHandle<String, V> getHandle(String key, Purpose purpose)
-	{
-		return new GaeKeyValueHandler(key);
-	}
-
-	@Override
-	protected Iterator<KeyValueHandle<String, V>> getHandles(Set<String> keySet, Purpose purpose)
-	{
-		return super.getHandles(keySet, purpose); // TODO: in READ scenarios, we can pre-fetch all keys in a single roundtrip
-	}
-
-	@Override
-	public Lock getWriteLock(String key)
-	{
-		return GaeMemcacheLock.getLock(kind + ":" + key, true);
-	}
-
-	/**
-	 * straightforward in-memory implementation of an index
-	 * 
-	 * @author Zach Melamed
-	 */
-	public class GaeIndexImpl<F> extends Index<String, V, F>
-	{
-		public GaeIndexImpl(IndexMapper<V, F> mapFunc, String name)
-		{
-			super(mapFunc, name);
-
-			if (name == null || name.isEmpty())
-				throw new RuntimeException("index name is mandatory in " + GaeIndexImpl.class.getSimpleName());
-		}
-
-		public Iterator<String> keyIteratorOf(F f)
-		{
-			return keyIteratorOfQuery(newIndexQuery(f).setKeysOnly());
-		}
-
-		@Override
-		public Iterator<V> entryIteratorOf(F f)
-		{
-			return entryIteratorOfQuery(newIndexQuery(f));
-		}
-
-		private Query newIndexQuery(F f)
-		{
-			Filter filter = new FilterPredicate(propertyName(), FilterOperator.EQUAL, f);
-			return newQuery().setFilter(filter);
-		}
-
-		private String propertyName()
-		{
-			return COL_NAME_INDEX_PREFIX + name;
-		}
-
-		private F getIndexedFieldOf(V entry)
-		{
-			return mapFunc.getIndexedFieldOf(entry);
-		}
 	}
 }

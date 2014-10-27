@@ -31,148 +31,10 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		V getValue();
 	}
 
-	public interface KeyValueHandle<K, V> extends KeyValue<K, V>
-	{
-		/**
-		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #getValue()} will return
-		 * the unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process, the method
-		 * {@link #commit(Object)} will be invoked.
-		 * <p>
-		 * NOTE: this method is called only on a locked entry
-		 */
-		V getModifiableValue();
-
-		/**
-		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link #getValue()} will return the updated value.
-		 * <p>
-		 * NOTE: this method is called only on a locked entry
-		 */
-		void commit(V entry);
-
-		/**
-		 * removes the key
-		 */
-		void delete();
-	}
-
 	public interface KeyMapper<K, V>
 	{
 		public K getKeyOf(V value);
 	}
-
-	public interface IndexMapper<V, F>
-	{
-		public F getIndexedFieldOf(V entry);
-	}
-
-	public static abstract class Index<K, V, F>
-	{
-		protected final IndexMapper<V, F> mapFunc;
-		protected final String name;
-
-		protected Index(IndexMapper<V, F> mapFunc, String name)
-		{
-			this.mapFunc = mapFunc;
-			this.name = name;
-		}
-
-		// ///////////////////////////////////////////////////////////////////////////////////////
-
-		public abstract Iterator<K> keyIteratorOf(F f);
-
-		public abstract Iterator<V> entryIteratorOf(F f);
-
-		// ///////////////////////////////////////////////////////////////////////////////////////
-
-		public Set<K> keySetOf(F f)
-		{
-			return KeyValueStore.iterateInto(keyIteratorOf(f), new HashSet<K>());
-		}
-
-		public List<V> entriesOf(F f)
-		{
-			return KeyValueStore.iterateInto(entryIteratorOf(f), new ArrayList<V>());
-		}
-
-		public Iterable<K> asKeyIterableOf(F f)
-		{
-			return KeyValueStore.iterableOf(keyIteratorOf(f));
-		}
-
-		public Iterable<V> asEntryIterableOf(F f)
-		{
-			return KeyValueStore.iterableOf(entryIteratorOf(f));
-		}
-
-		public K getFirstKey(F f)
-		{
-			Iterator<K> iter = keyIteratorOf(f);
-			if (iter.hasNext())
-				return iter.next();
-			return null;
-		}
-
-		public V getFirstEntry(F f)
-		{
-			Iterator<V> iter = entryIteratorOf(f);
-			if (iter.hasNext())
-				return iter.next();
-			return null;
-		}
-
-		public String getName()
-		{
-			return name;
-		}
-	}
-
-	public static abstract class Updater<V>
-	{
-		private boolean stopped = false;
-		private boolean changed = false;
-
-		protected void stopIteration()
-		{
-			stopped = true;
-		}
-
-		public boolean isChanged()
-		{
-			return changed;
-		}
-
-		/**
-		 * method inside which an entry may be safely modified with no concurrency concerns
-		 * 
-		 * @param entry
-		 *            thread-safe entry on which the modifications are to be performed. never a null.
-		 * @return
-		 *         true if the method indeed changed the entry
-		 */
-		public abstract boolean update(V entry);
-
-		/**
-		 * executes after the persistence has happened and getters return the new value. however, the entry is still locked at that point
-		 * and can be addressed without any concern that another updater tries to start a modification.
-		 * <p>
-		 * IMPORTANT: do not make any modifications to the passed entry inside this method
-		 */
-		public void postCommit(V entry)
-		{}
-
-		/**
-		 * called if an update process was requested on a non existing key
-		 */
-		public void entryNotFound()
-		{}
-	}
-
-	public static enum Purpose
-	{
-		READ, MODIFY, REPLACE, DELETE;
-	}
-
-	// ////////////////////////////////////////////////////////////////////////////////////////////////
 
 	protected final KeyMapper<K, V> keyMapper;
 
@@ -180,86 +42,80 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * creates a new key-value store manager
 	 * 
 	 * @param keyMapper
-	 *            this optional parameter is suitable for situations where the key of an entry can be inferred from it directly
-	 *            (alternatively, the key and value can be stored separately). when provided, several convenience methods become applicable
+	 *            this optional parameter is suitable in situations where the key of an entry can be inferred from its value directly
+	 *            (as opposed to when the key and value are stored separately). when provided, several convenience methods become applicable
 	 */
-	public KeyValueStore(KeyMapper<K, V> keyMapper)
+	protected KeyValueStore(KeyMapper<K, V> keyMapper)
 	{
 		this.keyMapper = keyMapper;
 	}
 
-	// ////////////////////////////////////////////////////////////////////////////////////////////////
+	/***********************************************************************************
+	 * 
+	 * GETTERS
+	 * 
+	 * many of the non-abstract methods here offer somewhat of a naive implementation.
+	 * subclasses are welcome to override with their own efficient implementation.
+	 *
+	 ***********************************************************************************/
 
-	/**
-	 * returns a short-lived {@link KeyValueHandle} instance corresponding to a given key, or optionally a null if such key doesn't exist.
-	 * The retrieved handle is used for a one-time CRUD operation on a key-value pair. Following this method, the returned handle will be
-	 * requested for the entry itself (for either read or write purposes).
-	 */
-	protected abstract KeyValueHandle<K, V> getHandle(K key, Purpose purpose);
-
-	/**
-	 * naive implementation for retrieving multiple keys at once. subclasses may provide a better one.
-	 */
-	protected Iterator<KeyValueHandle<K, V>> getHandles(Set<K> keySet, Purpose purpose)
-	{
-		// TODO: we need a different approach here. the iterator needs to be used in updateMulti()
-		List<KeyValueHandle<K, V>> list = new ArrayList<>();
-		for (K key : keySet)
-		{
-			KeyValueHandle<K, V> kvh = getHandle(key, purpose);
-			if (kvh != null)
-				list.add(kvh);
-		}
-		return list.iterator();
-	}
-
-	/**
-	 * As only one updater is desired at each given moment, whenever an updater thread starts the (non-atomic) process of updating a
-	 * key-value, all other attempts (globally, of course, not just on a single machine) should be blocked
-	 */
-	protected abstract Lock getWriteLock(K key);
+	public abstract V get(K key);
 
 	public abstract Iterator<KeyValue<K, V>> iterator();
 
-	public abstract Iterator<K> keyIterator();
-
-	public abstract Iterator<V> entryIterator();
-
-	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
-
-	public abstract void truncate();
-
-	/**
-	 * insert a new entry, whose key doesn't already exist in storage. it's a faster way to insert entries compared to
-	 * {@link #replace(Object, Object)} as it doesn't use any locking. do not use if you're not sure whether the key already exists. the
-	 * behavior of the system in such case is undetermined and implementation-dependent.
-	 */
-	public abstract void insert(K key, V entry);
-
-	// ////////////////////////////////////////////////////////////////////////////////////////////////
-
-	public V get(K key)
+	public Iterator<K> keyIterator()
 	{
-		KeyValueHandle<K, V> kvh = getHandle(key, Purpose.READ);
-		if (kvh == null)
-			return null;
-		return kvh.getValue();
+		final Iterator<KeyValue<K, V>> iter = iterator();
+		return new Iterator<K>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
+
+			@Override
+			public K next()
+			{
+				return iter.next().getKey();
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
 	}
 
-	public void delete(K key)
+	public Iterator<V> valueIterator()
 	{
-		KeyValueHandle<K, V> kvh = getHandle(key, Purpose.DELETE);
-		if (kvh != null)
-			kvh.delete();
+		final Iterator<KeyValue<K, V>> iter = iterator();
+		return new Iterator<V>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
+
+			@Override
+			public V next()
+			{
+				return iter.next().getValue();
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public Iterator<KeyValue<K, V>> iteratorFor(Set<K> keySet)
-	{
-		return (Iterator) getHandles(keySet, Purpose.READ);
-	}
+	public abstract Iterator<KeyValue<K, V>> iteratorFor(Set<K> keySet);
 
-	public Iterator<V> entryIteratorFor(Set<K> keySet)
+	public Iterator<V> valueIteratorFor(Set<K> keySet)
 	{
 		final Iterator<KeyValue<K, V>> iter = iteratorFor(keySet);
 		return new Iterator<V>()
@@ -284,43 +140,144 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		};
 	}
 
-	/**
-	 * naive implementation, using the key-iterator to create a set. subclass may have a better way.
-	 */
 	public Set<K> keySet()
 	{
 		return iterateInto(keyIterator(), new HashSet<K>());
 	}
 
-	/**
-	 * naive implementation, using the iterator implementation to create a list. subclass may have a better way.
-	 */
-	public List<V> entries()
+	public List<V> values()
 	{
-		return iterateInto(entryIterator(), new ArrayList<V>());
+		return iterateInto(valueIterator(), new ArrayList<V>());
 	}
 
-	public List<V> entriesFor(Set<K> keySet)
+	public List<V> valuesFor(Set<K> keySet)
 	{
-		return iterateInto(entryIteratorFor(keySet), new ArrayList<V>());
+		return iterateInto(valueIteratorFor(keySet), new ArrayList<V>());
 	}
 
-	// ////////////////////////////////////////////////////////////////////////////////////////////////
+	/***********************************************************************************
+	 * 
+	 * SETTERS (UTILS)
+	 *
+	 ***********************************************************************************/
 
 	/**
-	 * inserts or updates an entry. if you're sure that the entry is new, use the more efficient {@link #insert(Object, Object)} instead
+	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
+	 * <ul>
+	 * <li>using {@link KeyValueStore#replace(Object, Object)}: in such case only the {@link #commit(Object)} method will be invoked. it
+	 * will be passed an updated value for an existing key.
+	 * <li>using {@link KeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
+	 * generating an instance for the caller to safely modify, and then the {@link #commit(Object)} method will be invoked on that modified
+	 * instance.
+	 * </ul>
+	 * both methods are invoked under the concurrency protection a lock provided with {@link KeyValueStore#getModificationLock(Object)}.
 	 */
-	public void replace(K key, V entry)
+	protected interface Modifier<K, V>
 	{
-		Lock lock = getWriteLock(key);
+		/**
+		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #getValue()} will return
+		 * the unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process, the method
+		 * {@link #commit(Object)} will be invoked.
+		 * <p>
+		 * NOTE: this method is called only on a locked entry
+		 */
+		V getModifiableValue();
+
+		/**
+		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link #getValue()} will return the updated value.
+		 * <p>
+		 * NOTE: this method is called only on a locked entry
+		 */
+		void commit(V value);
+	}
+
+	protected static enum ModificationType
+	{
+		UPDATE, REPLACE;
+	}
+
+	/**
+	 * required to return a (short-lived) instance of {@link Modifier} corresponding to a given key, or a null if the passed key can't be
+	 * updated (because it doesn't exist, or for another reason). The returned instance is used for a one-time modification.
+	 */
+	protected abstract Modifier<K, V> getModifier(K key, ModificationType purpose);
+
+	/**
+	 * expected to return a global lock for a specific key (global means that it blocks other machines as well, not just the current
+	 * instance). It is a feature of this framework that only one updater is allowed for an entry at each given moment, so whenever an
+	 * updater thread starts the (non-atomic) process of updating the entry, all other attempts should be blocked.
+	 */
+	protected abstract Lock getModificationLock(K key);
+
+	public static abstract class Updater<V>
+	{
+		private boolean stopped = false;
+		private boolean changed = false;
+
+		protected void stopIteration()
+		{
+			stopped = true;
+		}
+
+		public boolean isChanged()
+		{
+			return changed;
+		}
+
+		/**
+		 * method inside which an entry may be safely modified with no concurrency or shared-state concerns
+		 * 
+		 * @param value
+		 *            thread-safe entry on which the modifications are to be performed. never a null.
+		 * @return
+		 *         true if the method indeed changed the entry
+		 */
+		public abstract boolean update(V value);
+
+		/**
+		 * executes after the persistence has happened and getters return the new value. however, the entry is still locked at that point
+		 * and can be addressed without any concern that another updater tries to start a modification.
+		 * <p>
+		 * IMPORTANT: do not make any modifications to the passed entry inside this method
+		 */
+		public void postCommit(V value)
+		{}
+
+		/**
+		 * called if an update process was requested on a non existing key
+		 */
+		public void entryNotFound()
+		{}
+	}
+
+	/***********************************************************************************
+	 * 
+	 * SETTERS
+	 *
+	 ***********************************************************************************/
+
+	/**
+	 * inserts a new entry, whose key doesn't already exist in storage. it's a faster and more resource-efficient way to insert entries
+	 * compared to {@link #replace(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
+	 * already exists. the behavior of the store in such case is undetermined and implementation-dependent.
+	 */
+	public abstract void insert(K key, V value);
+
+	/**
+	 * inserts or updates an entry. if you're sure that the entry is new (i.e. its key doesn't already exist), use the more efficient
+	 * {@link #insert(Object, Object)} instead
+	 */
+	public void replace(K key, V value)
+	{
+		Lock lock = getModificationLock(key);
 		lock.lock();
 		try
 		{
-			KeyValueHandle<K, V> kvh = getHandle(key, Purpose.REPLACE);
-			if (kvh == null)
-				insert(key, entry);
+			Modifier<K, V> modifier = getModifier(key, ModificationType.REPLACE);
+			if (modifier == null)
+				insert(key, value);
 			else
-				kvh.commit(entry);
+				modifier.commit(value);
 		}
 		finally
 		{
@@ -330,32 +287,32 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public V update(K key, Updater<V> updater)
 	{
-		KeyValueHandle<K, V> kvh = getHandle(key, Purpose.MODIFY);
-		if (kvh == null)
-		{
-			updater.entryNotFound();
-			return null;
-		}
-
-		Lock lock = getWriteLock(key);
+		Lock lock = getModificationLock(key);
 		lock.lock();
 		try
 		{
-			V entry = kvh.getModifiableValue();
-			if (entry == null)
+			Modifier<K, V> modifier = getModifier(key, ModificationType.UPDATE);
+			if (modifier == null)
 			{
 				updater.entryNotFound();
 				return null;
 			}
 
-			updater.changed = updater.update(entry);
+			V value = modifier.getModifiableValue();
+			if (value == null)
+			{
+				updater.entryNotFound();
+				return null;
+			}
+
+			updater.changed = updater.update(value);
 
 			if (updater.changed)
-				kvh.commit(entry);
+				modifier.commit(value);
 
-			updater.postCommit(entry);
+			updater.postCommit(value);
 
-			return entry;
+			return value;
 		}
 		finally
 		{
@@ -363,9 +320,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		}
 	}
 
-	public void updateMultiple(Collection<K> keys, Updater<V> updater)
+	public void update(Set<K> keySet, Updater<V> updater)
 	{
-		for (K key : keys)
+		for (K key : keySet)
 		{
 			update(key, updater);
 			if (updater.stopped)
@@ -373,12 +330,18 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		}
 	}
 
+	/***********************************************************************************
+	 * 
+	 * SETTERS (CONVENIENCE)
+	 *
+	 ***********************************************************************************/
+
 	/**
-	 * convenience method
+	 * convenience method to update all entries
 	 */
 	public void updateAll(Updater<V> updater)
 	{
-		updateMultiple(keySet(), updater);
+		update(keySet(), updater);
 	}
 
 	/**
@@ -386,9 +349,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * 
 	 * @see {@link #update(Object, Updater)}
 	 */
-	public V updateEntry(V entry, Updater<V> updater)
+	public V updateValue(V value, Updater<V> updater)
 	{
-		return update(keyMapper.getKeyOf(entry), updater);
+		return update(keyMapper.getKeyOf(value), updater);
 	}
 
 	/**
@@ -396,9 +359,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * 
 	 * @see {@link #insert(Object, Object)}
 	 */
-	public void insertEntry(V entry)
+	public void insertValue(V value)
 	{
-		insert(keyMapper.getKeyOf(entry), entry);
+		insert(keyMapper.getKeyOf(value), value);
 	}
 
 	/**
@@ -406,12 +369,102 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * 
 	 * @see {@link #replace(Object, Object)}
 	 */
-	public void replaceEntry(V entry)
+	public void replaceValue(V value)
 	{
-		replace(keyMapper.getKeyOf(entry), entry);
+		replace(keyMapper.getKeyOf(value), value);
 	}
 
-	// /////////////////////////////////////////////////////////////////////////////////////////////
+	/***********************************************************************************
+	 * 
+	 * DELETERS
+	 *
+	 ***********************************************************************************/
+
+	public abstract void delete(K key);
+
+	// TODO: add delete (keySet)
+
+	public abstract void truncate();
+
+	/***********************************************************************************
+	 * 
+	 * INDEXES
+	 *
+	 ***********************************************************************************/
+
+	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
+
+	public interface IndexMapper<V, F>
+	{
+		public F getIndexedFieldOf(V entry);
+	}
+
+	public static abstract class Index<K, V, F>
+	{
+		protected final IndexMapper<V, F> mapper;
+		protected final String name;
+
+		protected Index(IndexMapper<V, F> mapper, String name)
+		{
+			this.mapper = mapper;
+			this.name = name;
+		}
+
+		// ///////////////////////////////////////////////////////////////////////////////////////
+
+		public abstract Iterator<K> keyIteratorOf(F f);
+
+		public abstract Iterator<V> valueIteratorOf(F f);
+
+		// ///////////////////////////////////////////////////////////////////////////////////////
+
+		public Set<K> keySetOf(F f)
+		{
+			return KeyValueStore.iterateInto(keyIteratorOf(f), new HashSet<K>());
+		}
+
+		public List<V> valuesOf(F f)
+		{
+			return KeyValueStore.iterateInto(valueIteratorOf(f), new ArrayList<V>());
+		}
+
+		public Iterable<K> asKeyIterableOf(F f)
+		{
+			return KeyValueStore.iterableOf(keyIteratorOf(f));
+		}
+
+		public Iterable<V> asValueIterableOf(F f)
+		{
+			return KeyValueStore.iterableOf(valueIteratorOf(f));
+		}
+
+		public K getFirstKey(F f)
+		{
+			Iterator<K> iter = keyIteratorOf(f);
+			if (iter.hasNext())
+				return iter.next();
+			return null;
+		}
+
+		public V getFirstValue(F f)
+		{
+			Iterator<V> iter = valueIteratorOf(f);
+			if (iter.hasNext())
+				return iter.next();
+			return null;
+		}
+
+		public String getName()
+		{
+			return name;
+		}
+	}
+
+	/***********************************************************************************
+	 * 
+	 * INTERNAL UTILS
+	 *
+	 ***********************************************************************************/
 
 	protected static <R, T extends Collection<R>> T iterateInto(Iterator<R> iter, T collection)
 	{
