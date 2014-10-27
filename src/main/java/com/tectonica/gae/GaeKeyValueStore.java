@@ -104,6 +104,12 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		{
 			ds.put(entryToEntity(_key, entry));
 		}
+
+		@Override
+		public void delete()
+		{
+			ds.delete(KeyFactory.createKey(ancestor, kind, _key));
+		}
 	}
 
 	private final List<GaeIndexImpl<?>> indices;

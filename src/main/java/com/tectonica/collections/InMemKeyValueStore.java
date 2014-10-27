@@ -52,6 +52,13 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 			_entry = entry;
 			reindex(_key, oldEntry, entry);
 		}
+		
+		@Override
+		public void delete()
+		{
+			entries.remove(_key);
+			reindex(_key, _entry, null);
+		}
 	}
 
 	private final ConcurrentHashMap<K, KeyValueHandle<K, V>> entries;
@@ -174,7 +181,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		{
 			InMemIndexImpl<?> index = indices.get(i);
 			Object oldField = (oldEntry == null) ? null : index.mapFunc.getIndexedFieldOf(oldEntry);
-			Object newField = index.mapFunc.getIndexedFieldOf(newEntry);
+			Object newField = (newEntry == null) ? null : index.mapFunc.getIndexedFieldOf(newEntry);
 			boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
 			if (valueChanged)
 			{

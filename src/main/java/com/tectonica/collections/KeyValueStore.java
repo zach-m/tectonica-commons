@@ -43,12 +43,16 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		V getModifiableValue();
 
 		/**
-		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link #getValue()} will return the updated
-		 * value.
+		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link #getValue()} will return the updated value.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
 		void commit(V entry);
+
+		/**
+		 * removes the key
+		 */
+		void delete();
 	}
 
 	public interface KeyMapper<K, V>
@@ -165,7 +169,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public static enum Purpose
 	{
-		READ, MODIFY, REPLACE;
+		READ, MODIFY, REPLACE, DELETE;
 	}
 
 	// ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -240,6 +244,13 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		if (kvh == null)
 			return null;
 		return kvh.getValue();
+	}
+
+	public void delete(K key)
+	{
+		KeyValueHandle<K, V> kvh = getHandle(key, Purpose.DELETE);
+		if (kvh != null)
+			kvh.delete();
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
