@@ -20,11 +20,25 @@ public class NewId
 		String timePart = Long.toHexString(System.currentTimeMillis());
 
 		// all dates between 2004 and and 2527 are taking up 11 hex digits, so the following is unnecessary
-//		timePart = StrUtils.leftPad(timePart, 11, '0');
+//		timePart = leftPadded(timePart, 11, '0');
 
-		String randomPart = Long.toHexString(rand.nextLong());
+		String randomPart = leftPadded(Long.toHexString(rand.nextLong()), 16, '0');
 
 		return timePart + randomPart;
+	}
+
+	private static String leftPadded(String str, int targetLength, char padChar)
+	{
+		int padsCount = targetLength - str.length();
+
+		if (padsCount <= 0)
+			return str; // returns original String if longer than target length
+
+		final char[] pad = new char[padsCount];
+		for (int i = 0; i < pad.length; i++)
+			pad[i] = padChar;
+
+		return (new String(pad)).concat(str);
 	}
 
 	/**

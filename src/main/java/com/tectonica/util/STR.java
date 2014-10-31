@@ -68,4 +68,40 @@ public class STR
 
 		return s.substring(0, Math.min(s.length(), count));
 	}
+
+	public static String leftPad(String str, int targetLength, char padChar)
+	{
+		return pad(str, targetLength, padChar, true);
+	}
+
+	public static String rightPad(String str, int targetLength, char padChar)
+	{
+		return pad(str, targetLength, padChar, false);
+	}
+
+	public static String pad(String str, int targetLength, char padChar, boolean padLeft)
+	{
+		if (str == null || str.isEmpty())
+			return duplicate(padChar, targetLength);
+
+		int padsCount = targetLength - str.length();
+
+		if (padsCount <= 0)
+			return str; // returns original String if longer than target length
+
+		String padStr = duplicate(padChar, padsCount);
+		return padLeft ? padStr.concat(str) : str.concat(padStr);
+	}
+
+	public static String duplicate(char padChar, int repeat)
+	{
+		if (repeat <= 0)
+			return "";
+
+		final char[] buf = new char[repeat];
+		for (int i = 0; i < buf.length; i++)
+			buf[i] = padChar;
+
+		return new String(buf);
+	}
 }
