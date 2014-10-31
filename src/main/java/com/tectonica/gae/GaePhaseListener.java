@@ -7,8 +7,15 @@ import javax.faces.event.PhaseListener;
 
 /**
  * PhaseListener to ensure the HttpSession data is written to the datastore.
- * 
  * <p>
+ * To use, add the following to your {@code faces-config.xml}:
+ * 
+ * <pre>
+ * &lt;lifecycle&gt;
+ *    &lt;phase-listener&gt;com.tectonica.gae.GaePhaseListener&lt;/phase-listener&gt;
+ * &lt;/lifecycle&gt;
+ * </pre>
+ * 
  * If properly configured, an application deployed on GAE platform can leverage HttpSessions to store data between requests. Session data is
  * stored in the datastore and memcache is also used for speed. Session data is persisted at the <strong>end</strong> of the request.
  * <p>
