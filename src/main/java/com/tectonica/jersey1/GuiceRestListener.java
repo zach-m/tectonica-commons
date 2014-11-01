@@ -47,6 +47,14 @@ public class GuiceRestListener extends GuiceServletContextListener
 		return injector.getInstance(type);
 	}
 
+	/**
+	 * given an injectable instance, injects its dependencies
+	 */
+	public static void injectMembers(Object instance)
+	{
+		injector.injectMembers(instance);
+	}
+
 	public static class GuiceRestModule extends ServletModule
 	{
 		@Override
