@@ -77,12 +77,38 @@ public class HTTP
 	public static class Attachment
 	{
 		public final String fieldName;
+		public final String fileName;
 		public final File file;
+		public final InputStream is;
 
-		public Attachment(String fieldName, File file)
+		public Attachment(File file, String fieldName)
 		{
 			this.fieldName = fieldName;
 			this.file = file;
+			this.fileName = file.getName();
+			this.is = null;
+		}
+
+		public Attachment(InputStream is, String fieldName, String fileName)
+		{
+			this.fieldName = fieldName;
+			this.file = null;
+			this.fileName = fileName;
+			this.is = is;
+		}
+
+		private InputStream getStream()
+		{
+			if (is != null)
+				return is;
+			try
+			{
+				return new FileInputStream(file);
+			}
+			catch (IOException e)
+			{
+				throw new RuntimeException(e);
+			}
 		}
 	}
 
@@ -139,7 +165,7 @@ public class HTTP
 		try
 		{
 			boolean sendText = (body != null && !body.isEmpty());
-			boolean sendMultipart = !sendText && (attachment != null && (attachment.file != null));
+			boolean sendMultipart = !sendText && (attachment != null);
 
 			long timeBefore = System.currentTimeMillis();
 
@@ -169,7 +195,7 @@ public class HTTP
 			{
 				conn.setRequestProperty("Content-Type", "multipart/form-data;boundary=" + BOUNDARY);
 				DataOutputStream out = new DataOutputStream(conn.getOutputStream());
-				writeFile(attachment.file, attachment.fieldName, out); // can be done repeatedly with other files
+				writeFile(attachment.getStream(), attachment.fieldName, attachment.fileName, out); // can be re-iterated with other files
 				out.writeBytes(HYPHENS + BOUNDARY + HYPHENS + CRLF);
 				out.flush();
 				out.close();
@@ -217,28 +243,29 @@ public class HTTP
 
 	private static String streamToContent(InputStream is) throws IOException
 	{
-		BufferedReader in = new BufferedReader(new InputStreamReader(is));
 		StringBuffer sb = new StringBuffer();
+
+		BufferedReader in = new BufferedReader(new InputStreamReader(is));
 		String line;
 		while ((line = in.readLine()) != null)
 			sb.append(line).append("\n");
-		String content = (sb.length() == 0) ? "" : sb.substring(0, sb.length() - "\n".length());
 		in.close();
-		return content;
+
+		return (sb.length() == 0) ? "" : sb.substring(0, sb.length() - "\n".length());
 	}
 
-	private static void writeFile(File file, String fieldName, DataOutputStream out) throws IOException, FileNotFoundException
+	private static void writeFile(InputStream is, String fieldName, String fileName, DataOutputStream out) throws IOException,
+			FileNotFoundException
 	{
 		out.writeBytes(HYPHENS + BOUNDARY + CRLF);
-		out.writeBytes("Content-Disposition: form-data; name=\"" + fieldName + "\";filename=\"" + file.getName() + "\"" + CRLF);
+		out.writeBytes("Content-Disposition: form-data; name=\"" + fieldName + "\";filename=\"" + fileName + "\"" + CRLF);
 		out.writeBytes(CRLF);
-		FileInputStream upload = new FileInputStream(file);
-		byte[] buffer = new byte[4096];
+		byte[] buffer = new byte[8192];
 		int bytesRead = -1;
-		while ((bytesRead = upload.read(buffer)) != -1)
+		while ((bytesRead = is.read(buffer)) != -1)
 			out.write(buffer, 0, bytesRead);
 		out.flush();
-		upload.close();
+		is.close();
 		out.writeBytes(CRLF);
 	}
 

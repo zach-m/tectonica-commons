@@ -1,5 +1,6 @@
 package com.tectonica.util;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -18,7 +19,7 @@ public class IO
 
 	public static void streamToStringBuilder(final InputStream inputStream, StringBuilder sb)
 	{
-		try (final Reader in = new InputStreamReader(inputStream, "UTF-8"))
+		try (final Reader in = new BufferedReader(new InputStreamReader(inputStream, "UTF-8")))
 		{
 			final char[] buffer = new char[1024];
 			int read;
