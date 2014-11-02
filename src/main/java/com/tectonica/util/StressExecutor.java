@@ -1,4 +1,4 @@
-package com.tectonica.test;
+package com.tectonica.util;
 
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;

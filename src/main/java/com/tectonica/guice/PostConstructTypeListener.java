@@ -1,4 +1,4 @@
-package com.tectonica.jersey1;
+package com.tectonica.guice;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

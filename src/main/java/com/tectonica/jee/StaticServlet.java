@@ -1,4 +1,4 @@
-package com.tectonica.util;
+package com.tectonica.jee;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.DatatypeConverter;
 
+import com.tectonica.util.SearchReplaceReader;
 import com.tectonica.util.SearchReplaceReader.TokenResolver;
 
 public abstract class StaticServlet extends HttpServlet

@@ -1,4 +1,4 @@
-package com.tectonica.util;
+package com.tectonica.jee;
 
 import java.io.BufferedReader;
 import java.io.IOException;

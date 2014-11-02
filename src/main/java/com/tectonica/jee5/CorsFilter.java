@@ -1,4 +1,4 @@
-package com.tectonica.jersey1;
+package com.tectonica.jee5;
 
 import javax.ws.rs.core.MultivaluedMap;
 
