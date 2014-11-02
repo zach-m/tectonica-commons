@@ -8,7 +8,8 @@ import com.sun.faces.vendor.WebContainerInjectionProvider;
 /**
  * An optional injector for Mojarra-based applications where dependency injection is required into the {@code @ManagedBean}s. It extends
  * {@link WebContainerInjectionProvider}, which normally handles invocations of {@code @PostConstruct} and {@code @PreDestroy}, by also
- * adding dependency-injection for {@code @ManagedBean}s using the Guice injector created in {@link GuiceRestListener}.
+ * adding dependency-injection for {@code @ManagedBean}s using the Guice injector created in {@link GuiceRestListener}. This creator, by the
+ * way, also handles {@code @PostConstruct} methods, so we make sure to avoid double invocation here.
  * <p>
  * To use, add the following paragraph to {@code web.xml} alongside your other JSF configuration:
  * 
@@ -19,6 +20,10 @@ import com.sun.faces.vendor.WebContainerInjectionProvider;
  * &lt;/context-param&gt;
  * </pre>
  * 
+ * <b>NOTE:</b> make sure your {@link GuiceRestListener}-subclass is an active listener in the {@code web.xml}, or NullPointerExceptions
+ * will be thrown
+ * <p>
+ * 
  * @author Zach Melamed
  */
 public class GuiceJsfInjector extends WebContainerInjectionProvider
@@ -26,18 +31,27 @@ public class GuiceJsfInjector extends WebContainerInjectionProvider
 	@Override
 	public void inject(Object managedBean) throws InjectionProviderException
 	{
-		// we only want to inject into @ManagedBean annotated classes
-		boolean isManagedBean = managedBean.getClass().getAnnotation(ManagedBean.class) != null;
-		if (isManagedBean)
+		if (isToBeInjectedByGuice(managedBean))
 			GuiceRestListener.injectMembers(managedBean);
+	}
+
+	/**
+	 * as an arbitrary choice, the choice here is to inject only into {@code @ManagedBean} instances, so that other classes - not written by
+	 * us - wouldn't be injected too. This choice could be altered.
+	 * 
+	 * @param managedBean
+	 * @return
+	 */
+	private boolean isToBeInjectedByGuice(Object managedBean)
+	{
+		return managedBean.getClass().getAnnotation(ManagedBean.class) != null;
 	}
 
 	@Override
 	public void invokePostConstruct(Object managedBean) throws InjectionProviderException
 	{
-		// @PostConstruct is already handled by us for classes annotated with @ManagedBean
-		boolean isManagedBean = managedBean.getClass().getAnnotation(ManagedBean.class) != null;
-		if (!isManagedBean)
+		// @PostConstruct is already handled in classes we injected
+		if (!isToBeInjectedByGuice(managedBean))
 			super.invokePostConstruct(managedBean);
 	}
 
