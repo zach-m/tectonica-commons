@@ -31,13 +31,13 @@ public class GaePhaseListener implements PhaseListener
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public void afterPhase(PhaseEvent arg0)
+	public void afterPhase(PhaseEvent event)
 	{
 		FacesContext.getCurrentInstance().getExternalContext().getSessionMap().put("CURRENT_TIME", System.currentTimeMillis());
 	}
 
 	@Override
-	public void beforePhase(PhaseEvent arg0)
+	public void beforePhase(PhaseEvent event)
 	{}
 
 	@Override
