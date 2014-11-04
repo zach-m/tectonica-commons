@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -56,10 +58,30 @@ public class GaeBlobServlet extends HttpServlet
 	/**
 	 * taken from the {@code web.xml} servlet mapping for {@link GaeBlobServlet}
 	 */
-	public static final String BLOB_URI = "/blob";
+	private static final String DEFAULT_BLOB_URI = "/blob";
+	private static String serveUrl = DEFAULT_BLOB_URI;
+	private static String postUploadUri = DEFAULT_BLOB_URI;
 
-	private final BlobstoreService blobSvc = BlobstoreServiceFactory.getBlobstoreService();
-	private ImagesService imgSvc = ImagesServiceFactory.getImagesService();
+	private static final BlobstoreService blobSvc = BlobstoreServiceFactory.getBlobstoreService();
+	private static final ImagesService imgSvc = ImagesServiceFactory.getImagesService();
+
+	@Override
+	public void init() throws ServletException
+	{
+		String postUploadUriParam = getServletConfig().getInitParameter("post-upload-uri");
+		if (postUploadUriParam != null)
+		{
+			postUploadUri = postUploadUriParam;
+			System.out.println("Overiden postUploadUri: " + postUploadUri);
+		}
+
+		String serveUrlParam = getServletConfig().getInitParameter("serve-url");
+		if (serveUrlParam != null)
+		{
+			serveUrl = serveUrlParam;
+			System.out.println("Overiden serveUrl: " + serveUrl);
+		}
+	}
 
 	/**
 	 * a callback handler, invoked by GAE after an upload ended successfully. we use it to analyze what was uploaded and return it to
@@ -71,6 +93,8 @@ public class GaeBlobServlet extends HttpServlet
 		Map<String, List<BlobKey>> uploads = blobSvc.getUploads(req);
 		Map<String, List<FileInfo>> infos = blobSvc.getFileInfos(req);
 
+		System.out.println("doPost.req.getPathInfo=" + req.getPathInfo());
+
 		List<UploadRec> uploadRecs = new ArrayList<>(uploads.size());
 		for (Entry<String, List<BlobKey>> entry : uploads.entrySet())
 		{
@@ -79,25 +103,33 @@ public class GaeBlobServlet extends HttpServlet
 			FileInfo info = infos.get(fieldName).get(0);
 
 			String contentType = info.getContentType();
-			final String url;
+			final String servingUrl;
 			if (contentType.startsWith("image/"))
-				url = imgSvc.getServingUrl(ServingUrlOptions.Builder.withBlobKey(blobKey));
+				servingUrl = imgSvc.getServingUrl(ServingUrlOptions.Builder.withBlobKey(blobKey));
 			else
-				url = baseUrlOf(req) + BLOB_URI + "?k=" + blobKey.getKeyString();
+				servingUrl = getServingUrl(req) + "?k=" + blobKey.getKeyString();
 
 			UploadRec upload = new UploadRec();
 			upload.setFieldName(fieldName);
 			upload.setCreatedOn(new Date());
-			upload.setUrl(url);
+			upload.setUrl(servingUrl);
 			upload.setFilename(info.getFilename());
 			upload.setContentType(contentType);
 			upload.setSize(info.getSize());
 
 			uploadRecs.add(upload);
+			System.out.println(upload);
 		}
 
 		res.setContentType("application/json");
 		res.getOutputStream().print(Jackson1.propsToJson(uploadRecs));
+	}
+
+	private String getServingUrl(HttpServletRequest req)
+	{
+		if (serveUrl.startsWith("/"))
+			return baseUrlOf(req) + serveUrl;
+		return serveUrl;
 	}
 
 	/**
@@ -109,10 +141,29 @@ public class GaeBlobServlet extends HttpServlet
 		blobSvc.serve(new BlobKey(req.getParameter("k")), res);
 	}
 
-	private String baseUrlOf(HttpServletRequest req)
+	private static String baseUrlOf(HttpServletRequest req)
 	{
 		String url = req.getRequestURL().toString();
 		return url.substring(0, url.length() - req.getRequestURI().length()) + req.getContextPath();
+	}
+
+	public static String createUrl()
+	{
+		return blobSvc.createUploadUrl(postUploadUri);
+
+	}
+
+	public static String createRelativeUrl(HttpServletRequest req)
+	{
+		return createUrl().substring(baseUrlOf(req).length());
+	}
+
+	public static boolean isMultipart(ServletRequest request)
+	{
+		String contentType = request.getContentType();
+		if (contentType != null && contentType.toLowerCase(Locale.ENGLISH).startsWith("multipart/form-data"))
+			return true;
+		return false;
 	}
 
 	// //////////////////////////////////////////////////////////////////////////////
@@ -185,6 +236,13 @@ public class GaeBlobServlet extends HttpServlet
 		public void setSize(long size)
 		{
 			this.size = size;
+		}
+
+		@Override
+		public String toString()
+		{
+			return "UploadRec [fieldName=" + fieldName + ", createdOn=" + createdOn + ", url=" + url + ", filename=" + filename
+					+ ", contentType=" + contentType + ", size=" + size + "]";
 		}
 	}
 }
