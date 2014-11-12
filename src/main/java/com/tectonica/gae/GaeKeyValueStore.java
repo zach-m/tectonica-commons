@@ -44,7 +44,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	/***********************************************************************************
 	 * 
 	 * GETTERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -88,7 +88,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	/***********************************************************************************
 	 * 
 	 * SETTERS (UTILS)
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -120,7 +120,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	/***********************************************************************************
 	 * 
 	 * SETTERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -132,7 +132,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	/***********************************************************************************
 	 * 
 	 * DELETERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -151,7 +151,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	/***********************************************************************************
 	 * 
 	 * INDEXES
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -177,6 +177,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 				throw new RuntimeException("index name is mandatory in " + GaeIndexImpl.class.getSimpleName());
 		}
 
+		@Override
+		public Iterator<KeyValue<String, V>> iteratorOf(F f)
+		{
+			return entryIteratorOfQuery(newIndexQuery(f));
+		}
+
+		@Override
 		public Iterator<String> keyIteratorOf(F f)
 		{
 			return keyIteratorOfQuery(newIndexQuery(f).setKeysOnly());
@@ -208,7 +215,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	/***********************************************************************************
 	 * 
 	 * DATASTORE UTILS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	private static final String COL_NAME_ENTRY_VALUE = "value";

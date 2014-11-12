@@ -10,7 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.tectonica.collections.ConcurrentMultimap;
 import com.tectonica.util.SerializeUtil;
 
 public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore<K, V>
@@ -77,7 +76,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	/***********************************************************************************
 	 * 
 	 * GETTERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -124,7 +123,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	/***********************************************************************************
 	 * 
 	 * SETTERS (UTILS)
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -146,7 +145,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	/***********************************************************************************
 	 * 
 	 * SETTERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -162,7 +161,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	/***********************************************************************************
 	 * 
 	 * DELETERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -193,7 +192,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	/***********************************************************************************
 	 * 
 	 * INDEXES
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	@Override
@@ -223,6 +222,47 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 
 		@Override
+		public Iterator<KeyValue<K, V>> iteratorOf(F f)
+		{
+			final Iterator<K> iter = keyIteratorOf(f);
+			return new Iterator<KeyValue<K, V>>()
+			{
+				@Override
+				public boolean hasNext()
+				{
+					return iter.hasNext();
+				}
+
+				@Override
+				public KeyValue<K, V> next()
+				{
+					final K key = iter.next();
+					final V value = entries.get(key).getValue();
+					return new KeyValue<K, V>()
+					{
+						@Override
+						public K getKey()
+						{
+							return key;
+						}
+
+						@Override
+						public V getValue()
+						{
+							return value;
+						}
+					};
+				}
+
+				@Override
+				public void remove()
+				{
+					throw new UnsupportedOperationException();
+				}
+			};
+		}
+
+		@Override
 		public Iterator<K> keyIteratorOf(F f)
 		{
 			Set<K> keySet = dictionary.get(f);
@@ -235,6 +275,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		public Iterator<V> valueIteratorOf(F f)
 		{
 			final Iterator<K> iter = keyIteratorOf(f);
+			final V value = entries.get(iter.next()).getValue();
 			return new Iterator<V>()
 			{
 				@Override
@@ -246,7 +287,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 				@Override
 				public V next()
 				{
-					return entries.get(iter.next()).getValue();
+					return value;
 				}
 
 				@Override

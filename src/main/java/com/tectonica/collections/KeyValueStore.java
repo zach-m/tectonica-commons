@@ -56,7 +56,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * 
 	 * many of the non-abstract methods here offer somewhat of a naive implementation.
 	 * subclasses are welcome to override with their own efficient implementation.
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	public abstract V get(K key);
@@ -158,7 +158,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/***********************************************************************************
 	 * 
 	 * SETTERS (UTILS)
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	/**
@@ -253,7 +253,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/***********************************************************************************
 	 * 
 	 * SETTERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	/**
@@ -333,7 +333,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/***********************************************************************************
 	 * 
 	 * SETTERS (CONVENIENCE)
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	/**
@@ -377,7 +377,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/***********************************************************************************
 	 * 
 	 * DELETERS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	public abstract void delete(K key);
@@ -389,7 +389,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/***********************************************************************************
 	 * 
 	 * INDEXES
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
@@ -412,11 +412,19 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 		// ///////////////////////////////////////////////////////////////////////////////////////
 
+		public abstract Iterator<KeyValue<K, V>> iteratorOf(F f);
+
 		public abstract Iterator<K> keyIteratorOf(F f);
 
 		public abstract Iterator<V> valueIteratorOf(F f);
 
 		// ///////////////////////////////////////////////////////////////////////////////////////
+
+		public boolean keyExistsOf(F f)
+		{
+			Iterator<K> iter = keyIteratorOf(f);
+			return (iter.hasNext());
+		}
 
 		public Set<K> keySetOf(F f)
 		{
@@ -428,6 +436,16 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			return KeyValueStore.iterateInto(valueIteratorOf(f), new ArrayList<V>());
 		}
 
+		public List<KeyValue<K, V>> entriesOf(F f)
+		{
+			return KeyValueStore.iterateInto(iteratorOf(f), new ArrayList<KeyValue<K, V>>());
+		}
+
+		public Iterable<KeyValue<K, V>> asIterableOf(F f)
+		{
+			return KeyValueStore.iterableOf(iteratorOf(f));
+		}
+
 		public Iterable<K> asKeyIterableOf(F f)
 		{
 			return KeyValueStore.iterableOf(keyIteratorOf(f));
@@ -436,6 +454,14 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		public Iterable<V> asValueIterableOf(F f)
 		{
 			return KeyValueStore.iterableOf(valueIteratorOf(f));
+		}
+
+		public KeyValue<K, V> getFirstEntry(F f)
+		{
+			Iterator<KeyValue<K, V>> iter = iteratorOf(f);
+			if (iter.hasNext())
+				return iter.next();
+			return null;
 		}
 
 		public K getFirstKey(F f)
@@ -463,7 +489,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/***********************************************************************************
 	 * 
 	 * INTERNAL UTILS
-	 *
+	 * 
 	 ***********************************************************************************/
 
 	protected static <R, T extends Collection<R>> T iterateInto(Iterator<R> iter, T collection)
