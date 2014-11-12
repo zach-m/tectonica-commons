@@ -4,7 +4,7 @@
 
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.3.1</version>
+	<version>0.3.2</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide lightweight solutions for common situations</description>
@@ -48,7 +48,7 @@
 	</properties>
 
 	<dependencies>
-	
+
 		<!-- JavaMail -->
 		<dependency>
 			<groupId>javax.mail</groupId>

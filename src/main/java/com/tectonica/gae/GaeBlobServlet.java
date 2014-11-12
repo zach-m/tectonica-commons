@@ -72,14 +72,14 @@ public class GaeBlobServlet extends HttpServlet
 		if (postUploadUriParam != null)
 		{
 			postUploadUri = postUploadUriParam;
-			System.out.println("Overiden postUploadUri: " + postUploadUri);
+//			System.out.println("Overiden postUploadUri: " + postUploadUri);
 		}
 
 		String serveUrlParam = getServletConfig().getInitParameter("serve-url");
 		if (serveUrlParam != null)
 		{
 			serveUrl = serveUrlParam;
-			System.out.println("Overiden serveUrl: " + serveUrl);
+//			System.out.println("Overiden serveUrl: " + serveUrl);
 		}
 	}
 
@@ -93,7 +93,7 @@ public class GaeBlobServlet extends HttpServlet
 		Map<String, List<BlobKey>> uploads = blobSvc.getUploads(req);
 		Map<String, List<FileInfo>> infos = blobSvc.getFileInfos(req);
 
-		System.out.println("doPost.req.getPathInfo=" + req.getPathInfo());
+//		System.out.println("doPost.req.getPathInfo=" + req.getPathInfo());
 
 		List<UploadRec> uploadRecs = new ArrayList<>(uploads.size());
 		for (Entry<String, List<BlobKey>> entry : uploads.entrySet())
@@ -118,7 +118,7 @@ public class GaeBlobServlet extends HttpServlet
 			upload.setSize(info.getSize());
 
 			uploadRecs.add(upload);
-			System.out.println(upload);
+//			System.out.println(upload);
 		}
 
 		res.setContentType("application/json");
