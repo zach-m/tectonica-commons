@@ -1,6 +1,7 @@
 package com.tectonica.util;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 public class REF
 {
@@ -19,10 +20,14 @@ public class REF
 		{
 			for (Field field : clz.getDeclaredFields())
 			{
-				field.setAccessible(true);
-				Object override = field.get(overlay);
-				if (override != null)
-					field.set(base, override);
+				int mods = field.getModifiers();
+				if (!Modifier.isStatic(mods) && !Modifier.isFinal(mods))
+				{
+					field.setAccessible(true);
+					Object override = field.get(overlay);
+					if (override != null)
+						field.set(base, override);
+				}
 			}
 			Class<?> superclz = clz.getSuperclass();
 			if (!Object.class.equals(superclz))
@@ -34,20 +39,56 @@ public class REF
 		}
 	}
 
-//	@Getter
-//	@Setter
 //	public static class Animal
 //	{
 //		private String name;
-//		private Integer age;
+//		private int age;
+//
+//		public String getName()
+//		{
+//			return name;
+//		}
+//
+//		public void setName(String name)
+//		{
+//			this.name = name;
+//		}
+//
+//		public int getAge()
+//		{
+//			return age;
+//		}
+//
+//		public void setAge(int age)
+//		{
+//			this.age = age;
+//		}
 //	}
 //
-//	@Getter
-//	@Setter
 //	public static class Dog extends Animal
 //	{
 //		private Double tail;
 //		private String bark;
+//
+//		public Double getTail()
+//		{
+//			return tail;
+//		}
+//
+//		public void setTail(Double tail)
+//		{
+//			this.tail = tail;
+//		}
+//
+//		public String getBark()
+//		{
+//			return bark;
+//		}
+//
+//		public void setBark(String bark)
+//		{
+//			this.bark = bark;
+//		}
 //
 //		@Override
 //		public String toString()
