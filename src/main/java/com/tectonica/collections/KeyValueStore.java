@@ -2,6 +2,7 @@ package com.tectonica.collections;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -117,6 +118,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public Iterator<V> valueIteratorFor(Set<K> keySet)
 	{
+		if (keySet.isEmpty())
+			return Collections.emptyIterator();
+		
 		final Iterator<KeyValue<K, V>> iter = iteratorFor(keySet);
 		return new Iterator<V>()
 		{
@@ -152,6 +156,8 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public List<V> valuesFor(Set<K> keySet)
 	{
+		if (keySet.isEmpty())
+			return Collections.emptyList();
 		return iterateInto(valueIteratorFor(keySet), new ArrayList<V>());
 	}
 

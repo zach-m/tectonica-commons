@@ -2,6 +2,7 @@ package com.tectonica.gae;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -81,6 +82,9 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	@Override
 	public Iterator<KeyValue<String, V>> iteratorFor(Set<String> keySet)
 	{
+		if (keySet.isEmpty())
+			return Collections.emptyIterator();
+
 		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, keySet);
 		return entryIteratorOfQuery(newQuery().setFilter(filter));
 	}

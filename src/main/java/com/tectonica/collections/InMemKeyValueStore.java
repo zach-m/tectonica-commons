@@ -104,6 +104,9 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	@Override
 	public Iterator<KeyValue<K, V>> iteratorFor(Set<K> keySet)
 	{
+		if (keySet.isEmpty())
+			return Collections.emptyIterator();
+		
 		List<KeyValue<K, V>> list = new ArrayList<>();
 		for (K key : keySet)
 		{
