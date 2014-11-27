@@ -3,6 +3,7 @@ package com.tectonica.gae;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -42,6 +43,11 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		this.indexes = new ArrayList<>();
 	}
 
+	private Key keyOf(String key)
+	{
+		return KeyFactory.createKey(ancestor, kind, key);
+	}
+
 	/***********************************************************************************
 	 * 
 	 * GETTERS
@@ -53,7 +59,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	{
 		try
 		{
-			return entityToValue(ds.get(KeyFactory.createKey(ancestor, kind, key)));
+			return entityToValue(ds.get(keyOf(key)));
 		}
 		catch (EntityNotFoundException e)
 		{
@@ -85,7 +91,11 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		if (keySet.isEmpty())
 			return Collections.emptyIterator();
 
-		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, keySet);
+		Set<Key> gaeKeySet = new HashSet<>(keySet.size());
+		for (String key : keySet)
+			gaeKeySet.add(keyOf(key));
+
+		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, gaeKeySet);
 		return entryIteratorOfQuery(newQuery().setFilter(filter));
 	}
 
@@ -142,7 +152,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	@Override
 	public void delete(String key)
 	{
-		ds.delete(KeyFactory.createKey(ancestor, kind, key));
+		ds.delete(keyOf(key));
 	}
 
 	@Override
