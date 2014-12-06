@@ -82,7 +82,11 @@ public class GaeEmailSender
 	{
 		GaeEmailSender sender = new GaeEmailSender();
 		sender.msg.setSubject(subject, "UTF-8");
-		return sender.from(defaultFrom).replyTo(defaultReplyTo);
+		if (defaultFrom != null)
+			sender.from(defaultFrom);
+		if (defaultReplyTo != null)
+			sender.replyTo(defaultReplyTo);
+		return sender;
 	}
 
 	public GaeEmailSender from(String from) throws AddressException, MessagingException

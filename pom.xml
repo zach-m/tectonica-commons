@@ -4,7 +4,7 @@
 
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.3.2</version>
+	<version>0.3.5</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide lightweight solutions for common situations</description>
@@ -42,7 +42,7 @@
 		<version.jackson2>2.4.2</version.jackson2>
 		<version.jersey>1.18.1</version.jersey>
 		<version.servlets>2.5</version.servlets>
-		<version.appengine>1.9.14</version.appengine>
+		<version.appengine>1.9.15</version.appengine>
 		<version.jsf>2.2.8-02</version.jsf>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
