@@ -29,8 +29,8 @@ public abstract class StaticServlet extends HttpServlet
 
 	/**
 	 * <p>
-	 * Returns the exact path, within the WAR file, of the resource to return (given an requested HTTP url, passed in two parameters for
-	 * this function). The path is relative to the 'webapp' folder.
+	 * Returns the exact path, within the WAR file, of the resource to return (given a requested URL, indicated in the passed request
+	 * parameter). The path should be relative to the 'webapp' folder and start with a '/'.
 	 * <p>
 	 * If your goal is to serve resources without changing your tree structure (which will later allow you to activate/deactivate this
 	 * servlet without having to change any URLs), first make sure to have a mapping like this in {@code web.xml} (assuming, of course, that
@@ -45,18 +45,18 @@ public abstract class StaticServlet extends HttpServlet
 	 * then, when overriding this function, simply return:
 	 * 
 	 * <pre>
-	 * return servletPath + uriPath;
+	 * return request.getServletPath() + request.getPathInfo();
 	 * </pre>
 	 * 
-	 * This is probably the most typical scenario, certainly when the use-case is restricting access to the static content, but not the only
-	 * one possible.
+	 * This is probably the most typical scenario, certainly when the use-case is restricting access to the static content (but not the only
+	 * one possible).
+	 * <p>
+	 * <b>NOTE:</b> returning null will result-in an HTTP-400 response.
 	 * 
-	 * @param servletPath
-	 *            the mapped part of the resource URL, as indicated in the {@code <servlet-mapping>} paragraph
-	 * @param uriPath
-	 *            the remaining part of the resource URL, typically ending with a file extension
+	 * @param request
+	 *            the request itself, from which the request URL can be obtained. one may also use it to set attributes for later use
 	 */
-	protected abstract String getLocalPath(String servletPath, String uriPath);
+	protected abstract String getLocalPath(HttpServletRequest request);
 
 	/**
 	 * Returns an (optionally null) search-replace resolver to apply on textual content before serving them. This resolver may be created
@@ -65,16 +65,16 @@ public abstract class StaticServlet extends HttpServlet
 	 * <pre>
 	 * Map&lt;String, String&gt; tokens = new HashMap&lt;String, String&gt;();
 	 * 
-	 * tokens.put(&quot;name&quot;, &quot;zach&quot;);
-	 * tokens.put(&quot;email&quot;, &quot;zach@tectonica.co.il&quot;);
+	 * tokens.put(&quot;NAME&quot;, &quot;zach&quot;);
+	 * tokens.put(&quot;EMAIL&quot;, &quot;zach@tectonica.co.il&quot;);
 	 * 
 	 * return new MapTokenResolver(tokens);
 	 * </pre>
 	 * 
-	 * When such resolver is applied, any occurrence of {@code $name} and {@code $email} will be replaced with the corresponding values
-	 * listed above.
+	 * When such resolver is applied, any occurrence of <b><code>${NAME}</code></b> and <b><code>${EMAIL}</code></b> will be replaced with
+	 * the corresponding values listed above.
 	 */
-	protected TokenResolver getTokenResolver(String localPath)
+	protected TokenResolver getTokenResolver(String localPath, HttpServletRequest request)
 	{
 		return null;
 	}
@@ -100,16 +100,16 @@ public abstract class StaticServlet extends HttpServlet
 	 * &#064;Override
 	 * protected boolean checkAuthorization(HttpServletRequest request, HttpServletResponse response) throws IOException
 	 * {
-	 *     boolean authorized = false;
+	 * 	boolean authorized = false;
 	 * 
-	 *     UserService userService = UserServiceFactory.getUserService();
-	 *     if (userService.isUserLoggedIn())
-	 *         authorized = ApiProxy.getCurrentEnvironment().getEmail().endsWith(&quot;@tectonica.co.il&quot;);
+	 * 	UserService userService = UserServiceFactory.getUserService();
+	 * 	if (userService.isUserLoggedIn())
+	 * 		authorized = ApiProxy.getCurrentEnvironment().getEmail().endsWith(&quot;@tectonica.co.il&quot;);
 	 * 
-	 *     if (!authorized)
-	 *         response.sendRedirect(userService.createLoginURL(request.getRequestURI()));
+	 * 	if (!authorized)
+	 * 		response.sendRedirect(userService.createLoginURL(request.getRequestURI()));
 	 * 
-	 *     return authorized;
+	 * 	return authorized;
 	 * }
 	 * </pre>
 	 * 
@@ -142,15 +142,19 @@ public abstract class StaticServlet extends HttpServlet
 	 * response.setHeader(&quot;Cache-Control&quot;, &quot;max-age=900,must-revalidate&quot;); // 15-minutes
 	 * </pre>
 	 */
-	protected void setCustomHeaders(HttpServletResponse response)
+	protected void setCustomHeaders(HttpServletRequest request, HttpServletResponse response)
 	{}
 
 	@Override
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException
 	{
-		String uriPath = request.getPathInfo();
-		String servletPath = request.getServletPath();
-		String localPath = getLocalPath(servletPath, uriPath);
+		String localPath = getLocalPath(request);
+		if (localPath == null)
+		{
+			response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+			return;
+		}
+
 		InputStream is = getServletContext().getResourceAsStream(localPath);
 		if (is == null)
 		{
@@ -161,20 +165,20 @@ public abstract class StaticServlet extends HttpServlet
 		if (!checkAuthorization(request, response))
 			return;
 
-		String mimeType = getMimeType(response, uriPath);
+		String mimeType = getMimeType(localPath, request);
 		response.setContentType(mimeType);
 
-		setCustomHeaders(response);
+		setCustomHeaders(request, response);
 
 		ServletOutputStream os = response.getOutputStream();
 
-		if (!returnManipulatedText(is, os, localPath, mimeType))
-			writeBinary(is, os); // i.e. return as-is
+		if (!(mimeType.startsWith("text/") && writeManipulatedChars(is, os, localPath, request)))
+			writeBytes(is, os); // i.e. return as-is
 
 		os.close();
 	}
 
-	protected String getMimeType(HttpServletResponse response, String path)
+	protected String getMimeType(String path, HttpServletRequest request)
 	{
 		String mimeType = getServletContext().getMimeType(path);
 		if (mimeType == null)
@@ -182,32 +186,34 @@ public abstract class StaticServlet extends HttpServlet
 		return mimeType;
 	}
 
-	private boolean returnManipulatedText(InputStream is, OutputStream os, String localPath, String mimeType) throws IOException
+	private boolean writeManipulatedChars(InputStream is, OutputStream os, String localPath, HttpServletRequest request)
+			throws IOException
 	{
-		TokenResolver tokenResolver = getTokenResolver(localPath);
-		if ((tokenResolver != null) && mimeType.startsWith("text/"))
-		{
-			SearchReplaceReader reader = new SearchReplaceReader(new InputStreamReader(is), tokenResolver);
-			OutputStreamWriter writer = new OutputStreamWriter(os);
-			writeText(reader, writer);
-			return true;
-		}
-		return false;
+		TokenResolver tokenResolver = getTokenResolver(localPath, request);
+		if (tokenResolver == null)
+			return false;
+
+		SearchReplaceReader reader = new SearchReplaceReader(new InputStreamReader(is), tokenResolver);
+		OutputStreamWriter writer = new OutputStreamWriter(os);
+		writeChars(reader, writer);
+		return true;
 	}
 
-	protected void writeBinary(InputStream in, OutputStream out) throws IOException
+	protected void writeBytes(InputStream in, OutputStream out) throws IOException
 	{
 		int read;
 		final byte[] data = new byte[8192];
 		while ((read = in.read(data)) != -1)
 			out.write(data, 0, read);
+		out.flush();
 	}
 
-	protected void writeText(Reader in, Writer out) throws IOException
+	protected void writeChars(Reader in, Writer out) throws IOException
 	{
 		int read;
 		final char[] data = new char[8192];
 		while ((read = in.read(data)) != -1)
 			out.write(data, 0, read);
+		out.flush();
 	}
 }
