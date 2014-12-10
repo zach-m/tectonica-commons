@@ -55,7 +55,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	public V get(String key)
+	protected V doGet(String key)
 	{
 		try
 		{
@@ -114,7 +114,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			@Override
 			public V getModifiableValue()
 			{
-				return get(key); // same implementation as read-only get, as in both cases we deserialize a new instance
+				return doGet(key); // same implementation as read-only get, as in both cases we deserialize a new instance
 			}
 
 			@Override
@@ -138,7 +138,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	public void insert(String key, V value)
+	protected void doInsert(String key, V value)
 	{
 		save(key, value);
 	}

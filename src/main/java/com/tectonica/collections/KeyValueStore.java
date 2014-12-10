@@ -60,7 +60,14 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * 
 	 ***********************************************************************************/
 
-	public abstract V get(K key);
+	public V get(K key)
+	{
+		V value = doGet(key);
+		fireEvent(EventType.PostGet, key, value);
+		return value;
+	}
+
+	protected abstract V doGet(K key);
 
 	public abstract Iterator<KeyValue<K, V>> iterator();
 
@@ -120,7 +127,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	{
 		if (keySet.isEmpty())
 			return Collections.emptyIterator();
-		
+
 		final Iterator<KeyValue<K, V>> iter = iteratorFor(keySet);
 		return new Iterator<V>()
 		{
@@ -267,11 +274,17 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * compared to {@link #replace(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
 	 * already exists. the behavior of the store in such case is undetermined and implementation-dependent.
 	 */
-	public abstract void insert(K key, V value);
+	public void insert(K key, V value)
+	{
+		fireEvent(EventType.PreInsert, key, value);
+		doInsert(key, value);
+	}
+
+	protected abstract void doInsert(K key, V value);
 
 	/**
 	 * inserts or updates an entry. if you're sure that the entry is new (i.e. its key doesn't already exist), use the more efficient
-	 * {@link #insert(Object, Object)} instead
+	 * {@link #doInsert(Object, Object)} instead
 	 */
 	public void replace(K key, V value)
 	{
@@ -281,9 +294,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		{
 			Modifier<K, V> modifier = getModifier(key, ModificationType.REPLACE);
 			if (modifier == null)
-				insert(key, value);
+				doInsert(key, value);
 			else
+			{
+				fireEvent(EventType.PreReplace, key, value);
 				modifier.commit(value);
+			}
 		}
 		finally
 		{
@@ -311,10 +327,14 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 				return null;
 			}
 
+			fireEvent(EventType.PreUpdate, key, value);
 			updater.changed = updater.update(value);
 
 			if (updater.changed)
+			{
+				fireEvent(EventType.PreCommit, key, value);
 				modifier.commit(value);
+			}
 
 			updater.postCommit(value);
 
@@ -363,11 +383,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * convenience method applicable when {@code keyMapper} is provided
 	 * 
-	 * @see {@link #insert(Object, Object)}
+	 * @see {@link #doInsert(Object, Object)}
 	 */
 	public void insertValue(V value)
 	{
-		insert(keyMapper.getKeyOf(value), value);
+		doInsert(keyMapper.getKeyOf(value), value);
 	}
 
 	/**
@@ -394,6 +414,37 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	/***********************************************************************************
 	 * 
+	 * EVENTS
+	 * 
+	 ***********************************************************************************/
+
+	protected ConcurrentMultimap<EventType, EventHandler<K, V>> handlers = new ConcurrentMultimap<>();
+
+	public static enum EventType
+	{
+		PostGet, PreUpdate, PreCommit, PreInsert, PreReplace;
+	}
+
+	public interface EventHandler<K, V>
+	{
+		public void handle(EventType type, K key, V value);
+	}
+
+	public void addListener(EventType type, EventHandler<K, V> handler)
+	{
+		handlers.put(type, handler);
+	}
+
+	protected void fireEvent(EventType type, K key, V value)
+	{
+		Set<EventHandler<K, V>> events = handlers.get(type);
+		if (events != null)
+			for (EventHandler<K, V> event : events)
+				event.handle(type, key, value);
+	}
+
+	/***********************************************************************************
+	 * 
 	 * INDEXES
 	 * 
 	 ***********************************************************************************/
@@ -402,7 +453,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public interface IndexMapper<V, F>
 	{
-		public F getIndexedFieldOf(V entry);
+		public F getIndexedFieldOf(V value);
 	}
 
 	public static abstract class Index<K, V, F>

@@ -80,7 +80,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	 ***********************************************************************************/
 
 	@Override
-	public V get(K key)
+	protected V doGet(K key)
 	{
 		KeyValue<K, V> kv = entries.get(key);
 		if (kv == null)
@@ -152,7 +152,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	 ***********************************************************************************/
 
 	@Override
-	public void insert(K key, V value)
+	protected void doInsert(K key, V value)
 	{
 		Modifier<K, V> existing = entries.putIfAbsent(key, new InMemEntry(key, value));
 		if (existing == null)
