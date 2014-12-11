@@ -121,9 +121,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		};
 	}
 
-	public abstract Iterator<KeyValue<K, V>> iteratorFor(Set<K> keySet);
+	public abstract Iterator<KeyValue<K, V>> iteratorFor(Collection<K> keySet);
 
-	public Iterator<V> valueIteratorFor(Set<K> keySet)
+	public Iterator<V> valueIteratorFor(Collection<K> keySet)
 	{
 		if (keySet.isEmpty())
 			return Collections.emptyIterator();
@@ -161,7 +161,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return iterateInto(valueIterator(), new ArrayList<V>());
 	}
 
-	public List<V> valuesFor(Set<K> keySet)
+	public List<V> valuesFor(Collection<K> keySet)
 	{
 		if (keySet.isEmpty())
 			return Collections.emptyList();
@@ -346,7 +346,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		}
 	}
 
-	public void update(Set<K> keySet, Updater<V> updater)
+	public void update(Collection<K> keySet, Updater<V> updater)
 	{
 		for (K key : keySet)
 		{

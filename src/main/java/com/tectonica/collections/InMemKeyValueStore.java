@@ -2,6 +2,7 @@ package com.tectonica.collections;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -102,7 +103,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	}
 
 	@Override
-	public Iterator<KeyValue<K, V>> iteratorFor(Set<K> keySet)
+	public Iterator<KeyValue<K, V>> iteratorFor(Collection<K> keySet)
 	{
 		if (keySet.isEmpty())
 			return Collections.emptyIterator();

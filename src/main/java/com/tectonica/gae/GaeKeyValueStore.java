@@ -2,6 +2,7 @@ package com.tectonica.gae;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -86,7 +87,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	}
 
 	@Override
-	public Iterator<KeyValue<String, V>> iteratorFor(Set<String> keySet)
+	public Iterator<KeyValue<String, V>> iteratorFor(Collection<String> keySet)
 	{
 		if (keySet.isEmpty())
 			return Collections.emptyIterator();
