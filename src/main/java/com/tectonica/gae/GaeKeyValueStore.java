@@ -4,10 +4,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.locks.Lock;
 
 import com.google.appengine.api.datastore.Blob;
@@ -92,7 +90,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		if (keySet.isEmpty())
 			return Collections.emptyIterator();
 
-		Set<Key> gaeKeySet = new HashSet<>(keySet.size());
+		List<Key> gaeKeySet = new ArrayList<>(keySet.size());
 		for (String key : keySet)
 			gaeKeySet.add(keyOf(key));
 
