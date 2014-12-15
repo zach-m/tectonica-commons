@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.Lock;
 
 import com.google.appengine.api.datastore.Blob;
@@ -18,6 +19,8 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.Filter;
 import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
+import com.google.appengine.api.memcache.MemcacheService;
+import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.tectonica.collections.KeyValueStore;
 import com.tectonica.util.SerializeUtil;
 
@@ -44,6 +47,53 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private Key keyOf(String key)
 	{
 		return KeyFactory.createKey(ancestor, kind, key);
+	}
+
+	@Override
+	protected Cache<String, V> createCache()
+	{
+		return new Cache<String, V>()
+		{
+			private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
+
+			@Override
+			@SuppressWarnings("unchecked")
+			public V get(String key)
+			{
+				return (V) mc.get(key);
+			}
+
+			@Override
+			@SuppressWarnings("unchecked")
+			public Map<String, V> get(Collection<String> keys)
+			{
+				return (Map<String, V>) (Map<String, ?>) mc.getAll(keys);
+			}
+
+			@Override
+			public void put(String key, V value)
+			{
+				mc.put(key, value);
+			}
+
+			@Override
+			public void put(Map<String, V> values)
+			{
+				mc.putAll(values);
+			}
+
+			@Override
+			public void delete(String key)
+			{
+				mc.delete(key);
+			}
+
+			@Override
+			public void truncate()
+			{
+				mc.clearAll();
+			}
+		};
 	}
 
 	/***********************************************************************************

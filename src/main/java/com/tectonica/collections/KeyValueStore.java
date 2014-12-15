@@ -82,6 +82,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return null;
 	}
 
+	public void clearCache()
+	{
+		if (usingCache)
+			cache.truncate();
+	}
+
 	protected final Cache<K, V> cache;
 	protected final boolean usingCache;
 
@@ -134,12 +140,27 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			return dbIterate(keys);
 
 		final Map<K, V> cachedValues = cache.get(keys);
-		List<K> uncachedKeys = new ArrayList<>();
-		for (K key : keys)
-			if (!cachedValues.containsKey(key))
-				uncachedKeys.add(key);
 
-		final Iterator<KeyValue<K, V>> dbIter = dbIterate(uncachedKeys);
+		final Iterator<KeyValue<K, V>> dbIter;
+		if (cachedValues.size() == keys.size())
+			dbIter = Collections.emptyIterator(); // all keys were found in cache
+		else
+		{
+			final Collection<K> uncachedKeys;
+			if (cachedValues.size() == 0) // no key was found on cache
+				uncachedKeys = keys;
+			else
+			{
+				uncachedKeys = new ArrayList<>();
+				for (K key : keys)
+					if (!cachedValues.containsKey(key))
+						uncachedKeys.add(key);
+			}
+			if (uncachedKeys.isEmpty())
+				dbIter = Collections.emptyIterator(); // possible only when duplicate keys were passed as input
+			else
+				dbIter = dbIterate(uncachedKeys);
+		}
 
 		return new Iterator<KeyValue<K, V>>()
 		{
@@ -188,7 +209,8 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 				if (postponeCaching && toCache != null)
 				{
-					cache.put(toCache);
+					if (!toCache.isEmpty())
+						cache.put(toCache);
 					toCache = null;
 				}
 

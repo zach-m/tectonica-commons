@@ -42,7 +42,7 @@
 		<version.jackson2>2.4.2</version.jackson2>
 		<version.jersey>1.18.1</version.jersey>
 		<version.servlets>2.5</version.servlets>
-		<version.appengine>1.9.15</version.appengine>
+		<version.appengine>1.9.17</version.appengine>
 		<version.jsf>2.2.8-02</version.jsf>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -120,6 +120,26 @@
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- GAE Testing -->
+		<dependency>
+			<groupId>com.google.appengine</groupId>
+			<artifactId>appengine-testing</artifactId>
+			<version>${version.appengine}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.google.appengine</groupId>
+			<artifactId>appengine-api-stubs</artifactId>
+			<version>${version.appengine}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.google.appengine</groupId>
+			<artifactId>appengine-api-labs</artifactId>
+			<version>${version.appengine}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
