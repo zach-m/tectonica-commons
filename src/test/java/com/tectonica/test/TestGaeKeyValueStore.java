@@ -94,6 +94,7 @@ public class TestGaeKeyValueStore
 		store.insertValue(new Topic("002", "type1", TopicKind.AAA));
 		store.insertValue(new Topic("003", "type3", TopicKind.AAA));
 		store.insertValue(new Topic("004", "type3", TopicKind.AAA));
+		store.clearCache();
 		System.err.println("-----------------------------------------------");
 		System.err.println("[TEST]  " + store.get("001"));
 		System.err.println("-----------------------------------------------");

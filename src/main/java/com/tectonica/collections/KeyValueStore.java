@@ -441,6 +441,8 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * *********************************************************************************
 	 */
 
+	protected abstract void dbInsert(K key, V value);
+
 	/**
 	 * inserts a new entry, whose key doesn't already exist in storage. it's a faster and more resource-efficient way to insert entries
 	 * compared to {@link #replace(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
@@ -454,11 +456,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			cache.put(key, value);
 	}
 
-	protected abstract void dbInsert(K key, V value);
-
 	/**
 	 * inserts or updates an entry. if you're sure that the entry is new (i.e. its key doesn't already exist), use the more efficient
-	 * {@link #dbInsert(Object, Object)} instead
+	 * {@link #insert(Object, Object)} instead
 	 */
 	public void replace(K key, V value)
 	{
@@ -562,11 +562,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * convenience method applicable when {@code keyMapper} is provided
 	 * 
-	 * @see {@link #dbInsert(Object, Object)}
+	 * @see {@link #insert(Object, Object)}
 	 */
 	public void insertValue(V value)
 	{
-		dbInsert(keyMapper.getKeyOf(value), value);
+		insert(keyMapper.getKeyOf(value), value);
 	}
 
 	/**
