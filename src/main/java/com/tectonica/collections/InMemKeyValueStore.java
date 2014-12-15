@@ -66,7 +66,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 
 		@Override
-		public void commit(V value)
+		public void dbWrite(V value)
 		{
 			V oldEntry = _value;
 			_value = value;
@@ -81,7 +81,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	 ***********************************************************************************/
 
 	@Override
-	protected V doGet(K key)
+	protected V dbRead(K key)
 	{
 		KeyValue<K, V> kv = entries.get(key);
 		if (kv == null)
@@ -103,13 +103,10 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	}
 
 	@Override
-	public Iterator<KeyValue<K, V>> iteratorFor(Collection<K> keySet)
+	protected Iterator<KeyValue<K, V>> dbIterate(Collection<K> keys)
 	{
-		if (keySet.isEmpty())
-			return Collections.emptyIterator();
-		
 		List<KeyValue<K, V>> list = new ArrayList<>();
-		for (K key : keySet)
+		for (K key : keys)
 		{
 			KeyValue<K, V> kv = entries.get(key);
 			if (kv != null)
@@ -153,7 +150,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	 ***********************************************************************************/
 
 	@Override
-	protected void doInsert(K key, V value)
+	protected void dbInsert(K key, V value)
 	{
 		Modifier<K, V> existing = entries.putIfAbsent(key, new InMemEntry(key, value));
 		if (existing == null)
@@ -169,7 +166,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	 ***********************************************************************************/
 
 	@Override
-	public void delete(K key)
+	protected void dbDelete(K key)
 	{
 		if (indexes.size() == 0)
 			entries.remove(key); // without indexes to update, this is a primitive operation
@@ -186,7 +183,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	}
 
 	@Override
-	public void truncate()
+	protected void dbTruncate()
 	{
 		entries.clear();
 		locks.clear();
@@ -240,22 +237,8 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 				@Override
 				public KeyValue<K, V> next()
 				{
-					final K key = iter.next();
-					final V value = entries.get(key).getValue();
-					return new KeyValue<K, V>()
-					{
-						@Override
-						public K getKey()
-						{
-							return key;
-						}
-
-						@Override
-						public V getValue()
-						{
-							return value;
-						}
-					};
+					K key = iter.next();
+					return keyValueOf(key, entries.get(key).getValue());
 				}
 
 				@Override
@@ -269,10 +252,10 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		@Override
 		public Iterator<K> keyIteratorOf(F f)
 		{
-			Set<K> keySet = dictionary.get(f);
-			if (keySet == null)
+			Set<K> keys = dictionary.get(f);
+			if (keys == null)
 				return Collections.emptyIterator();
-			return keySet.iterator();
+			return keys.iterator();
 		}
 
 		@Override

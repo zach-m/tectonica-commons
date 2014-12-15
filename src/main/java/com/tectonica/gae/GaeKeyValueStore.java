@@ -3,7 +3,6 @@ package com.tectonica.gae;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
@@ -54,7 +53,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	protected V doGet(String key)
+	protected V dbRead(String key)
 	{
 		try
 		{
@@ -85,16 +84,18 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	}
 
 	@Override
-	public Iterator<KeyValue<String, V>> iteratorFor(Collection<String> keySet)
+	protected Iterator<KeyValue<String, V>> dbIterate(Collection<String> keys)
 	{
-		if (keySet.isEmpty())
-			return Collections.emptyIterator();
+		if (keys.size() > 30)
+			throw new RuntimeException("GAE doesn't support more than 30 at the time, need to break it");
 
-		List<Key> gaeKeySet = new ArrayList<>(keySet.size());
-		for (String key : keySet)
-			gaeKeySet.add(keyOf(key));
+		List<Key> gaeKeys = new ArrayList<>(keys.size());
+		for (String key : keys)
+			gaeKeys.add(keyOf(key));
 
-		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, gaeKeySet);
+		// we define a filter based on the IN operator, which returns values in the order of listing.
+		// see: https://cloud.google.com/appengine/docs/java/datastore/queries#Java_Query_structure
+		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, gaeKeys);
 		return entryIteratorOfQuery(newQuery().setFilter(filter));
 	}
 
@@ -113,11 +114,14 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			@Override
 			public V getModifiableValue()
 			{
-				return doGet(key); // same implementation as read-only get, as in both cases we deserialize a new instance
+				// we use here same calls as if for read-only value, because in both cases a new instance is deserialized
+				// NOTE: if we ever switch to a different implementation, with local objects, this wouldn't work
+				V value = usingCache ? cache.get(key) : null;
+				return (value != null) ? value : dbRead(key);
 			}
 
 			@Override
-			public void commit(V value)
+			public void dbWrite(V value)
 			{
 				save(key, value);
 			}
@@ -137,7 +141,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	protected void doInsert(String key, V value)
+	protected void dbInsert(String key, V value)
 	{
 		save(key, value);
 	}
@@ -149,13 +153,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	public void delete(String key)
+	protected void dbDelete(String key)
 	{
 		ds.delete(keyOf(key));
 	}
 
 	@Override
-	public void truncate()
+	protected void dbTruncate()
 	{
 		for (Entity entity : ds.prepare(newQuery().setKeysOnly()).asIterable())
 			ds.delete(entity.getKey());
