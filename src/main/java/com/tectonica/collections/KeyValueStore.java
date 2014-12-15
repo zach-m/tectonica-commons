@@ -16,13 +16,13 @@ import com.tectonica.collections.KeyValueStore.KeyValue;
 
 /**
  * Simple, yet powerful, framework (and approach) for handling a key-value store. It allows for multiple concurrent readers but a single
- * concurrent writer of each entry. It also provides a read-before-update mechanism which makes life simpler and keeps data consistent.
+ * concurrent writer on each entry. It also provides a read-before-update mechanism which makes life simpler and keeps data consistent.
  * Indexing is also supported as part of the framework. The interface is intuitive and straightforward. This class itself is abstract and
- * subclasses are included for several backend persistence engines, including in-memory. (which is great for development).
+ * subclasses are included for several backend persistence engines, including in-memory (which is great for development).
  * <p>
  * The usage of this framework would probably yield the most benefit when used to prototype a data model, where changes are frequent and not
  * backwards-compatible. However, in more than a few scenarios, this framework can be used in production. The heavy-lifting is done by the
- * backend database either way.
+ * backend database and cache either way.
  * 
  * @author Zach Melamed
  */
@@ -43,7 +43,8 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	protected final KeyMapper<K, V> keyMapper;
 
 	/**
-	 * creates a new key-value store manager
+	 * creates a new key-value store manager (this doesn't indicate creation of a brand new storage unit (e.g. table), only a creation of
+	 * this class, which manages a newly-created/pre-existing storage)
 	 * 
 	 * @param keyMapper
 	 *            this optional parameter is suitable in situations where the key of an entry can be inferred from its value directly
@@ -77,6 +78,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		void truncate();
 	}
 
+	/**
+	 * overridden by subclasses that wish to support a caching mechanism
+	 */
 	protected Cache<K, V> createCache()
 	{
 		return null;
@@ -91,16 +95,15 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	protected final Cache<K, V> cache;
 	protected final boolean usingCache;
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * GETTERS
 	 * 
 	 * many of the non-abstract methods here offer somewhat of a naive implementation.
 	 * subclasses are welcome to override with their own efficient implementation.
 	 * 
-	 * IMPORTANT: implementations are responsible to operate the cache consistently
-	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	protected abstract V dbRead(K key);
 
@@ -126,10 +129,10 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return value;
 	}
 
-//	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys)
-//	{
-//		return iteratorFor(keys, false);
-//	}
+	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys)
+	{
+		return iteratorFor(keys, false);
+	}
 
 	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys, final boolean postponeCaching)
 	{
@@ -285,10 +288,10 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		};
 	}
 
-//	public Iterator<V> valueIteratorFor(Collection<K> keys)
-//	{
-//		return valueIteratorFor(keys, false);
-//	}
+	public Iterator<V> valueIteratorFor(Collection<K> keys)
+	{
+		return valueIteratorFor(keys, false);
+	}
 
 	public Iterator<V> valueIteratorFor(Collection<K> keys, boolean postponeCaching)
 	{
@@ -335,13 +338,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return iterateInto(valueIteratorFor(keys, true), new ArrayList<V>());
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * SETTERS (PROTOCOL)
 	 * 
-	 * IMPORTANT: implementations are responsible to operate the cache consistently
-	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	/**
 	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
@@ -432,16 +434,17 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		{}
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * SETTERS
 	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	/**
 	 * inserts a new entry, whose key doesn't already exist in storage. it's a faster and more resource-efficient way to insert entries
 	 * compared to {@link #replace(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
-	 * already exists. the behavior of the store in such case is undetermined and implementation-dependent.
+	 * already exists. the behaviour of the store in such case is undetermined and implementation-dependent.
 	 */
 	public void insert(K key, V value)
 	{
@@ -531,11 +534,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		}
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * SETTERS (CONVENIENCE)
 	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	/**
 	 * convenience method to update all entries
@@ -575,11 +579,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		replace(keyMapper.getKeyOf(value), value);
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * DELETERS
 	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	protected abstract void dbDelete(K key);
 
@@ -599,11 +604,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		dbTruncate();
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * EVENTS
 	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	protected ConcurrentMultimap<EventType, EventHandler<K, V>> handlers = new ConcurrentMultimap<>();
 
@@ -630,11 +636,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 				event.handle(type, key, value);
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * INDEXES
 	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
 
@@ -730,11 +737,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		}
 	}
 
-	/***********************************************************************************
+	/* *********************************************************************************
 	 * 
 	 * INTERNAL UTILS
 	 * 
-	 ***********************************************************************************/
+	 * *********************************************************************************
+	 */
 
 	protected KeyValue<K, V> keyValueOf(final K key, final V value)
 	{
