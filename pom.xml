@@ -44,6 +44,7 @@
 		<version.servlets>2.5</version.servlets>
 		<version.appengine>1.9.17</version.appengine>
 		<version.jsf>2.2.8-02</version.jsf>
+		<version.kryo>3.0.0</version.kryo>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
@@ -112,6 +113,14 @@
 			<groupId>com.sun.faces</groupId>
 			<artifactId>jsf-impl</artifactId>
 			<version>${version.jsf}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- Kryo -->
+		<dependency>
+			<groupId>com.esotericsoftware</groupId>
+			<artifactId>kryo</artifactId>
+			<version>${version.kryo}</version>
 			<scope>provided</scope>
 		</dependency>
 
