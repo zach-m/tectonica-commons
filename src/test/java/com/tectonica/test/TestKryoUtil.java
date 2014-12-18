@@ -70,8 +70,7 @@ public class TestKryoUtil
 
 	private long stressSerialize(TestObj obj) throws InterruptedException
 	{
-		System.gc();
-		Thread.sleep(1000);
+		pause();
 		long serBefore = System.nanoTime();
 		for (int i = 0; i < REPS; i++)
 			SerializeUtil.bytesToObj(SerializeUtil.objToBytes(obj), TestObj.class);
@@ -82,8 +81,7 @@ public class TestKryoUtil
 
 	private void stressSafe(TestObj obj, long serTime) throws InterruptedException
 	{
-		System.gc();
-		Thread.sleep(1000);
+		pause();
 		long before = System.nanoTime();
 		for (int i = 0; i < REPS; i++)
 			KryoUtil.bytesToObj(KryoUtil.objToBytes(obj), TestObj.class);
@@ -93,13 +91,19 @@ public class TestKryoUtil
 
 	private void stressUnsafe(TestObj obj, long serTime) throws InterruptedException
 	{
-		System.gc();
-		Thread.sleep(1000);
+		pause();
 		long before = System.nanoTime();
 		for (int i = 0; i < REPS; i++)
 			KryoUtil.bytesToObj_SingleThreaded(KryoUtil.objToBytes_SingleThreaded(obj), TestObj.class);
 		long time = System.nanoTime() - before;
 		System.out.println("Kryo:      " + (time / REPS) + "      Serialize / Kryo: " + (1.0 * serTime / time));
+	}
+
+	private void pause() throws InterruptedException
+	{
+		System.gc();
+		Thread.sleep(1000);
+		System.gc();
 	}
 }
 

@@ -14,6 +14,7 @@ public class KryoUtil
 		public KryoBox()
 		{
 			kryo = new Kryo();
+			kryo.setReferences(false); // faster, but not suitable when cross-references are used (especially cyclic)
 //			kryo.setDefaultSerializer(CompatibleFieldSerializer.class);
 			output = new Output(1024, -1);
 		}
@@ -49,6 +50,10 @@ public class KryoUtil
 
 	private static Kryo kryo = new Kryo();
 	private static Output output = new Output(1024, -1);
+	static
+	{
+		kryo.setReferences(false);
+	}
 
 	public static byte[] objToBytes_SingleThreaded(Object obj)
 	{
