@@ -166,28 +166,32 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	 ***********************************************************************************/
 
 	@Override
-	protected void dbDelete(K key)
+	protected boolean dbDelete(K key)
 	{
+		InMemEntry removed = null;
 		if (indexes.size() == 0)
-			entries.remove(key); // without indexes to update, this is a primitive operation
+			removed = entries.remove(key); // without indexes to update, this is a primitive operation
 		else
 		{
 			KeyValue<K, V> kv = entries.get(key);
 			if (kv != null)
 			{
 				V oldValue = kv.getValue();
-				entries.remove(key);
+				removed = entries.remove(key);
 				reindex(key, oldValue, null);
 			}
 		}
+		return (removed != null);
 	}
 
 	@Override
-	protected void dbTruncate()
+	protected int dbTruncate()
 	{
+		int removed = entries.size();
 		entries.clear();
 		locks.clear();
 		clearIndices();
+		return removed;
 	}
 
 	/***********************************************************************************

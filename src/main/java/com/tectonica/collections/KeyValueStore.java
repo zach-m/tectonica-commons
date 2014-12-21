@@ -586,22 +586,22 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * *********************************************************************************
 	 */
 
-	protected abstract void dbDelete(K key);
+	protected abstract boolean dbDelete(K key);
 
-	protected abstract void dbTruncate();
+	protected abstract int dbTruncate();
 
-	public void delete(K key)
+	public boolean delete(K key)
 	{
 		if (usingCache)
 			cache.delete(key);
-		dbDelete(key);
+		return dbDelete(key);
 	}
 
-	public void truncate()
+	public int truncate()
 	{
 		if (usingCache)
 			cache.truncate();
-		dbTruncate();
+		return dbTruncate();
 	}
 
 	/* *********************************************************************************

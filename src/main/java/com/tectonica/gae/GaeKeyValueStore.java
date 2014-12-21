@@ -203,16 +203,22 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	protected void dbDelete(String key)
+	protected boolean dbDelete(String key)
 	{
 		ds.delete(keyOf(key));
+		return true; // we don't really know if the key previously existed
 	}
 
 	@Override
-	protected void dbTruncate()
+	protected int dbTruncate()
 	{
+		int removed = 0;
 		for (Entity entity : ds.prepare(newQuery().setKeysOnly()).asIterable())
+		{
 			ds.delete(entity.getKey());
+			removed++;
+		}
+		return removed; // an estimate. we have to assume that all keys existed before delete
 	}
 
 	/***********************************************************************************
