@@ -14,10 +14,30 @@ public class KryoUtil
 		public KryoBox()
 		{
 			kryo = new Kryo();
-			kryo.setReferences(false); // faster, but not suitable when cross-references are used (especially cyclic)
-//			kryo.setDefaultSerializer(CompatibleFieldSerializer.class);
+			configure(kryo);
 			output = new Output(1024, -1);
 		}
+	}
+
+	public static interface Configurator
+	{
+		void configure(Kryo kryo);
+	}
+
+	private static Configurator defaultConfigurator = new Configurator()
+	{
+		@Override
+		public void configure(Kryo kryo)
+		{
+			kryo.setReferences(false); // faster, but not suitable when cross-references are used (especially cyclic)
+//			kryo.setDefaultSerializer(CompatibleFieldSerializer.class);
+		}
+	};
+
+	private static void configure(Kryo kryo)
+	{
+		// TODO: allow an SPI for custom configuration
+		defaultConfigurator.configure(kryo);
 	}
 
 	private static ThreadLocal<KryoBox> kryos = new ThreadLocal<KryoBox>()
@@ -25,7 +45,7 @@ public class KryoUtil
 		protected KryoBox initialValue()
 		{
 			return new KryoBox();
-		};
+		}
 	};
 
 	public static byte[] objToBytes(Object obj)
@@ -52,7 +72,7 @@ public class KryoUtil
 	private static Output output = new Output(1024, -1);
 	static
 	{
-		kryo.setReferences(false);
+		configure(kryo);
 	}
 
 	public static byte[] objToBytes_SingleThreaded(Object obj)
