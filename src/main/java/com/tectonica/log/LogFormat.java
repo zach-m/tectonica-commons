@@ -3,6 +3,7 @@ package com.tectonica.log;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.logging.Formatter;
+import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
 public class LogFormat extends Formatter
@@ -12,13 +13,34 @@ public class LogFormat extends Formatter
 	@Override
 	public String format(LogRecord record)
 	{
-//		Level.FINEST  = trace()
-//		Level.FINE    = debug()
-//		Level.INFO    = info()
-//		Level.WARNING = warn()
-//		Level.SEVERE  = error()
-		return String.format("%s (%s) - %s%n%s", df.format(new Date(record.getMillis())), record.getLevel().toString().charAt(0),
-				record.getMessage(), getExceptionString(record));
+		String dateStr = df.format(new Date(record.getMillis()));
+		String levelStr = levelStrOf(record.getLevel()); // new String(record.getLevel().toString().charAt(0));
+		return String.format("%s [%s] - %s%n%s", dateStr, levelStr, record.getMessage(), getExceptionString(record));
+	}
+
+	private final int TRACE2 = Level.FINEST.intValue();
+	private final int TRACE1 = Level.FINER.intValue();
+	private final int DEBUG = Level.FINE.intValue();
+	private final int INFO = Level.INFO.intValue();
+	private final int WARN = Level.WARNING.intValue();
+	private final int ERROR = Level.SEVERE.intValue();
+
+	private String levelStrOf(Level level)
+	{
+		int levelValue = level.intValue();
+		if (levelValue == INFO)
+			return "INF";
+		if (levelValue == WARN)
+			return "WRN";
+		if (levelValue == ERROR)
+			return "ERR";
+		if (levelValue == DEBUG)
+			return "DBG";
+		if (levelValue == TRACE1)
+			return "TRC";
+		if (levelValue == TRACE2)
+			return "TRC";
+		return level.getName();
 	}
 
 	private String getExceptionString(LogRecord record)
