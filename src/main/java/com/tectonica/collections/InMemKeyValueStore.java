@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.tectonica.util.SerializeUtil;
+import com.tectonica.util.KryoUtil;
 
 public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore<K, V>
 {
@@ -62,7 +62,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		@Override
 		public V getModifiableValue()
 		{
-			return SerializeUtil.copyOf(_value); // TODO: replace with a more efficient implementation
+			return KryoUtil.copyOf(_value); // TODO: replace with a more efficient implementation
 		}
 
 		@Override

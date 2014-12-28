@@ -50,6 +50,8 @@ public class KryoUtil
 
 	public static byte[] objToBytes(Object obj)
 	{
+		if (obj == null)
+			return null;
 		KryoBox kryoBox = kryos.get();
 		kryoBox.output.clear();
 		kryoBox.kryo.writeObject(kryoBox.output, obj);
@@ -58,11 +60,15 @@ public class KryoUtil
 
 	public static <V> V bytesToObj(byte[] bytes, Class<V> clz)
 	{
+		if (bytes == null)
+			return null;
 		return kryos.get().kryo.readObject(new Input(bytes), clz);
 	}
 
 	public static <V> V copyOf(V obj)
 	{
+		if (obj == null)
+			return null;
 		return kryos.get().kryo.copy(obj);
 	}
 

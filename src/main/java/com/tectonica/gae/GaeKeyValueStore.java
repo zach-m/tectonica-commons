@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.locks.Lock;
 
 import com.google.appengine.api.datastore.Blob;
@@ -22,7 +23,7 @@ import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.tectonica.collections.KeyValueStore;
-import com.tectonica.util.SerializeUtil;
+import com.tectonica.util.KryoUtil;
 
 public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
 {
@@ -52,48 +53,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	@Override
 	protected Cache<String, V> createCache()
 	{
-		return new Cache<String, V>()
-		{
-			private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
-
-			@Override
-			@SuppressWarnings("unchecked")
-			public V get(String key)
-			{
-				return (V) mc.get(key);
-			}
-
-			@Override
-			@SuppressWarnings("unchecked")
-			public Map<String, V> get(Collection<String> keys)
-			{
-				return (Map<String, V>) (Map<String, ?>) mc.getAll(keys);
-			}
-
-			@Override
-			public void put(String key, V value)
-			{
-				mc.put(key, value);
-			}
-
-			@Override
-			public void put(Map<String, V> values)
-			{
-				mc.putAll(values);
-			}
-
-			@Override
-			public void delete(String key)
-			{
-				mc.delete(key);
-			}
-
-			@Override
-			public void deleteAll()
-			{
-				mc.clearAll();
-			}
-		};
+		return new KryoSerializeCache();
 	}
 
 	/***********************************************************************************
@@ -298,13 +258,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private V entityToValue(Entity entity)
 	{
 		Blob blob = (Blob) entity.getProperty(COL_NAME_ENTRY_VALUE);
-		return SerializeUtil.bytesToObj(blob.getBytes(), valueClass);
+		return KryoUtil.bytesToObj(blob.getBytes(), valueClass);
 	}
 
 	private Entity entryToEntity(String key, V value)
 	{
 		Entity entity = new Entity(kind, key, ancestor);
-		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(SerializeUtil.objToBytes(value)));
+		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(KryoUtil.objToBytes(value)));
 		for (int i = 0; i < indexes.size(); i++)
 		{
 			GaeIndexImpl<?> index = indexes.get(i);
@@ -412,4 +372,114 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			}
 		};
 	}
+
+	/***********************************************************************************
+	 * 
+	 * CACHE IMPLEMENTATION
+	 * 
+	 ***********************************************************************************/
+
+	class JavaSerializeCache implements Cache<String, V>
+	{
+		private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public V get(String key)
+		{
+			return (V) mc.get(key);
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public Map<String, V> get(Collection<String> keys)
+		{
+			return (Map<String, V>) (Map<String, ?>) mc.getAll(keys);
+		}
+
+		@Override
+		public void put(String key, V value)
+		{
+			mc.put(key, value);
+		}
+
+		@Override
+		public void put(Map<String, V> values)
+		{
+			mc.putAll(values);
+		}
+
+		@Override
+		public void delete(String key)
+		{
+			mc.delete(key);
+		}
+
+		@Override
+		public void deleteAll()
+		{
+			mc.clearAll();
+		}
+	};
+
+	class KryoSerializeCache implements Cache<String, V>
+	{
+		private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
+
+		@Override
+		public V get(String key)
+		{
+			byte[] bytes = (byte[]) mc.get(key);
+			return KryoUtil.bytesToObj(bytes, valueClass);
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public Map<String, V> get(Collection<String> keys)
+		{
+			Map<String, Object> values = mc.getAll(keys);
+			Iterator<Entry<String, Object>> iter = values.entrySet().iterator();
+			while (iter.hasNext())
+			{
+				Entry<String, Object> entry = iter.next();
+				byte[] bytes = (byte[]) entry.getValue();
+				entry.setValue(KryoUtil.bytesToObj(bytes, valueClass));
+			}
+			return (Map<String, V>) (Map<String, ?>) values;
+		}
+
+		@Override
+		public void put(String key, V value)
+		{
+			mc.put(key, KryoUtil.objToBytes(value));
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public void put(Map<String, V> values)
+		{
+			// NOTE: we make a huge assumption here, that we can modify the passed map. by doing so we rely on "inside information" that
+			// this is harmless given how 'iteratorFor' is implemented
+			Iterator<Entry<String, Object>> iter = ((Map<String, Object>) (Map<String, ?>) values).entrySet().iterator();
+			while (iter.hasNext())
+			{
+				Entry<String, Object> entry = iter.next();
+				Object value = entry.getValue();
+				entry.setValue(KryoUtil.objToBytes(value));
+			}
+			mc.putAll(values);
+		}
+
+		@Override
+		public void delete(String key)
+		{
+			mc.delete(key);
+		}
+
+		@Override
+		public void deleteAll()
+		{
+			mc.clearAll();
+		}
+	};
 }
