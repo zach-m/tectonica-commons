@@ -75,7 +75,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 		void delete(K key);
 
-		void truncate();
+		void deleteAll();
 	}
 
 	/**
@@ -89,7 +89,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	public void clearCache()
 	{
 		if (usingCache)
-			cache.truncate();
+			cache.deleteAll();
 	}
 
 	protected final Cache<K, V> cache;
@@ -588,7 +588,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	protected abstract boolean dbDelete(K key);
 
-	protected abstract int dbTruncate();
+	protected abstract int dbDeleteAll();
 
 	public boolean delete(K key)
 	{
@@ -597,11 +597,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return dbDelete(key);
 	}
 
-	public int truncate()
+	public int deleteAll()
 	{
 		if (usingCache)
-			cache.truncate();
-		return dbTruncate();
+			cache.deleteAll();
+		return dbDeleteAll();
 	}
 
 	/* *********************************************************************************

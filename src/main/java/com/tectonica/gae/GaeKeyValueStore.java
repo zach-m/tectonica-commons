@@ -89,7 +89,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			}
 
 			@Override
-			public void truncate()
+			public void deleteAll()
 			{
 				mc.clearAll();
 			}
@@ -210,7 +210,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	}
 
 	@Override
-	protected int dbTruncate()
+	protected int dbDeleteAll()
 	{
 		int removed = 0;
 		for (Entity entity : ds.prepare(newQuery().setKeysOnly()).asIterable())

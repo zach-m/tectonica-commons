@@ -185,7 +185,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	}
 
 	@Override
-	protected int dbTruncate()
+	protected int dbDeleteAll()
 	{
 		int removed = entries.size();
 		entries.clear();
