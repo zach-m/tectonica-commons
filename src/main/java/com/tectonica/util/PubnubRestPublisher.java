@@ -10,6 +10,9 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Provides REST-based implementation of PubNub's PUBLISH API, as an alternative for using PubNub's Java SDK, which relies on an internal
  * HTTP-requests queue, that may not play well with containers such as JavaEE and GAE. The REST API itself is invoked synchronously by
@@ -21,47 +24,38 @@ import java.util.regex.Pattern;
  */
 public class PubnubRestPublisher
 {
-	public static interface ResultListener
+	private static final Logger LOG = LoggerFactory.getLogger(PubnubRestPublisher.class);
+
+	public static interface Listener
 	{
-		void onResult(String channel, String result);
+		void onSuccess(String channel, String msg);
+
+		void onError(String channel, String msg);
 	}
 
-	private ResultListener successListener = new ResultListener()
+	private Listener listener = new Listener()
 	{
 		@Override
-		public void onResult(String channel, String result)
+		public void onSuccess(String channel, String msg)
 		{
-			System.out.println(result);
+			LOG.info(msg);
+		}
+
+		@Override
+		public void onError(String channel, String msg)
+		{
+			LOG.error(msg);
 		}
 	};
 
-	private ResultListener errorListener = new ResultListener()
+	public Listener getListener()
 	{
-		@Override
-		public void onResult(String channel, String result)
-		{
-			System.err.println(result);
-		}
-	};
-
-	public ResultListener getSuccessListener()
-	{
-		return successListener;
+		return listener;
 	}
 
-	public void setSuccessListener(ResultListener successListener)
+	public void setListener(Listener listener)
 	{
-		this.successListener = successListener;
-	}
-
-	public ResultListener getErrorListener()
-	{
-		return errorListener;
-	}
-
-	public void setErrorListener(ResultListener errorListener)
-	{
-		this.errorListener = errorListener;
+		this.listener = listener;
 	}
 
 	// //////////////////////////////////////////////////////////////////////////////
@@ -96,20 +90,20 @@ public class PubnubRestPublisher
 			String content = (is == null) ? "" : streamToString(is);
 			if (ok)
 			{
-				if (successListener != null)
-					successListener.onResult(channel, content);
+				if (listener != null)
+					listener.onSuccess(channel, content);
 			}
 			else
 			{
-				if (errorListener != null)
-					errorListener.onResult(channel, content);
+				if (listener != null)
+					listener.onError(channel, content);
 			}
 		}
 		catch (Exception e)
 		{
 			e.printStackTrace();
-			if (errorListener != null)
-				errorListener.onResult(channel, e.toString());
+			if (listener != null)
+				listener.onError(channel, e.toString());
 		}
 		finally
 		{
@@ -135,7 +129,7 @@ public class PubnubRestPublisher
 	 */
 	protected String stringAsJson(String text)
 	{
-		text = p1.matcher(text).replaceAll("\\\\\\\\"); // escape backslashes first
+		text = p1.matcher(text).replaceAll("\\\\\\\\"); // first escape backslashes
 		text = p2.matcher(text).replaceAll("\\\\\\\""); // escape quotation marks
 		return "\"" + text + "\"";
 	}
