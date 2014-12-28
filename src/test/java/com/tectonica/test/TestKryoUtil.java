@@ -32,8 +32,10 @@ public class TestKryoUtil
 	{
 		TestObj obj1 = TestObj.generate(3);
 		byte[] bytes = KryoUtil.objToBytes(obj1);
+		System.out.println("Storage size: " + bytes.length);
 		TestObj obj2 = KryoUtil.bytesToObj(bytes, TestObj.class);
 		assertEquals(obj1, obj2);
+		assertNotEquals(obj1.transit, obj2.transit);
 		System.out.println(obj1);
 		obj1.children.get(0).children.clear();
 		assertNotEquals(obj1, obj2);
@@ -116,6 +118,7 @@ class TestObj implements Serializable
 	final long[] quantities;
 	final String msg;
 	final List<TestObj> children;
+	final transient String transit;
 
 	public TestObj(boolean special, double[] prices, long[] quantities, String msg, List<TestObj> children)
 	{
@@ -124,6 +127,7 @@ class TestObj implements Serializable
 		this.quantities = quantities;
 		this.msg = msg;
 		this.children = children;
+		this.transit = "Here to go";
 	}
 
 	public static Random rand = new Random();
