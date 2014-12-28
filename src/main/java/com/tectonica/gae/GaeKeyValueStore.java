@@ -24,6 +24,7 @@ import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.tectonica.collections.KeyValueStore;
 import com.tectonica.util.KryoUtil;
+import com.tectonica.util.SerializeUtil;
 
 public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
 {
@@ -33,16 +34,25 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private final String kind;
 	private final Key ancestor; // dummy parent for all entities to guarantee Datastore consistency
 	private final List<GaeIndexImpl<?>> indexes;
+	private final Serializer<V> serializer;
 
 	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper)
 	{
+		this(valueClass, keyMapper, new JavaSerializer<V>());
+	}
+
+	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper, Serializer<V> serializer)
+	{
 		super(keyMapper);
 		if (valueClass == null)
-			throw new NullPointerException();
+			throw new NullPointerException("valueClass");
+		if (serializer == null)
+			throw new NullPointerException("serializer");
 		this.valueClass = valueClass;
 		this.kind = valueClass.getSimpleName();
 		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
 		this.indexes = new ArrayList<>();
+		this.serializer = serializer;
 	}
 
 	private Key keyOf(String key)
@@ -53,7 +63,9 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	@Override
 	protected Cache<String, V> createCache()
 	{
-		return new KryoSerializeCache();
+		if (serializer instanceof JavaSerializer)
+			return new JavaSerializeCache();
+		return new CustomSerializeCache();
 	}
 
 	/***********************************************************************************
@@ -258,13 +270,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private V entityToValue(Entity entity)
 	{
 		Blob blob = (Blob) entity.getProperty(COL_NAME_ENTRY_VALUE);
-		return KryoUtil.bytesToObj(blob.getBytes(), valueClass);
+		return serializer.bytesToObj(blob.getBytes(), valueClass);
 	}
 
 	private Entity entryToEntity(String key, V value)
 	{
 		Entity entity = new Entity(kind, key, ancestor);
-		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(KryoUtil.objToBytes(value)));
+		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(serializer.objToBytes(value)));
 		for (int i = 0; i < indexes.size(); i++)
 		{
 			GaeIndexImpl<?> index = indexes.get(i);
@@ -375,11 +387,54 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 
 	/***********************************************************************************
 	 * 
+	 * SERIALIZATION
+	 * 
+	 ***********************************************************************************/
+
+	public static interface Serializer<V>
+	{
+		V bytesToObj(byte[] bytes, Class<V> clz); // NOTE: if bytes is null, return null
+
+		byte[] objToBytes(V obj); // NOTE: if obj is null, return null
+	}
+
+	private static final class JavaSerializer<V> implements Serializer<V>
+	{
+		@Override
+		public V bytesToObj(byte[] bytes, Class<V> clz)
+		{
+			return SerializeUtil.bytesToObj(bytes, clz);
+		}
+
+		@Override
+		public byte[] objToBytes(V obj)
+		{
+			return SerializeUtil.objToBytes(obj);
+		}
+	}
+
+	public static class KryoSerializer<V> implements Serializer<V>
+	{
+		@Override
+		public V bytesToObj(byte[] bytes, Class<V> clz)
+		{
+			return KryoUtil.bytesToObj(bytes, clz);
+		}
+
+		@Override
+		public byte[] objToBytes(V obj)
+		{
+			return KryoUtil.objToBytes(obj);
+		}
+	}
+
+	/***********************************************************************************
+	 * 
 	 * CACHE IMPLEMENTATION
 	 * 
 	 ***********************************************************************************/
 
-	class JavaSerializeCache implements Cache<String, V>
+	private class JavaSerializeCache implements Cache<String, V>
 	{
 		private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
 
@@ -422,7 +477,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		}
 	};
 
-	class KryoSerializeCache implements Cache<String, V>
+	private class CustomSerializeCache implements Cache<String, V>
 	{
 		private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
 
@@ -430,7 +485,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		public V get(String key)
 		{
 			byte[] bytes = (byte[]) mc.get(key);
-			return KryoUtil.bytesToObj(bytes, valueClass);
+			return serializer.bytesToObj(bytes, valueClass);
 		}
 
 		@Override
@@ -443,7 +498,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			{
 				Entry<String, Object> entry = iter.next();
 				byte[] bytes = (byte[]) entry.getValue();
-				entry.setValue(KryoUtil.bytesToObj(bytes, valueClass));
+				entry.setValue(serializer.bytesToObj(bytes, valueClass));
 			}
 			return (Map<String, V>) (Map<String, ?>) values;
 		}
@@ -451,7 +506,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		@Override
 		public void put(String key, V value)
 		{
-			mc.put(key, KryoUtil.objToBytes(value));
+			mc.put(key, serializer.objToBytes(value));
 		}
 
 		@Override
@@ -465,7 +520,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			{
 				Entry<String, Object> entry = iter.next();
 				Object value = entry.getValue();
-				entry.setValue(KryoUtil.objToBytes(value));
+				entry.setValue(serializer.objToBytes((V) value));
 			}
 			mc.putAll(values);
 		}
