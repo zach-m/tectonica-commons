@@ -1,6 +1,7 @@
 package com.tectonica.util;
 
-import java.util.Collection;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
  * Miscellaneous string utility functions
@@ -10,46 +11,100 @@ import java.util.Collection;
 public class STR
 {
 	/**
-	 * returns a delimiter-separated string listing the {@code toString()} of an object collection
+	 * returns a comma-separated string, listing the {@code toString()} of a collection's items
 	 */
-	public static String implode(Collection<? extends Object> values)
+	public static <V> String implode(Iterable<V> values)
 	{
-		return implode(values, ", ");
+		return implode(values, ", ", false);
 	}
 
 	/**
-	 * returns a comma-separated string listing the {@code toString()} of an object collection
+	 * returns a delimiter-separated string, listing the {@code toString()} of a collection's items
 	 */
-	public static String implode(Collection<? extends Object> values, String delimiter)
+	public static <V> String implode(Iterable<V> values, String delimiter, boolean skipBlanks)
 	{
 		if (values == null)
 			return "";
 
 		StringBuilder sb = new StringBuilder();
 		boolean firstColumn = true;
-		for (Object value : values)
+		for (V value : values)
 		{
+			if (value == null)
+				continue;
+			String valueAsStr = value.toString();
+			if (skipBlanks && valueAsStr.isEmpty())
+				continue;
 			if (firstColumn)
 				firstColumn = false;
 			else
 				sb.append(delimiter);
-			sb.append(value.toString());
+			sb.append(valueAsStr);
 		}
 		return sb.toString();
 	}
 
 	/**
+	 * returns a delimiter-separated string, listing the {@code toString()} of a collection's items
+	 */
+	public static <V> String implode(final V[] values, String delimiter, boolean skipBlanks)
+	{
+		Iterable<V> a = new Iterable<V>()
+		{
+			@Override
+			public Iterator<V> iterator()
+			{
+				return new ArrayIterator<V>(values);
+			}
+		};
+		return implode(a, delimiter, skipBlanks);
+	}
+
+	private static class ArrayIterator<V> implements Iterator<V>
+	{
+		private final V[] array;
+		private int pos = 0;
+
+		public ArrayIterator(final V[] array)
+		{
+			super();
+			this.array = array;
+			this.pos = 0;
+		}
+
+		@Override
+		public boolean hasNext()
+		{
+			return (pos < array.length);
+		}
+
+		@Override
+		public V next()
+		{
+			if (!hasNext())
+				throw new NoSuchElementException();
+			return array[pos++];
+		}
+
+		@Override
+		public void remove()
+		{
+			throw new UnsupportedOperationException();
+		}
+	}
+
+	/**
 	 * duplicates a string into a delimiter-separated format given a requested count
 	 */
-	public static String implode(String s, int count)
+	public static <V> String implode(V value, String delimiter, int count)
 	{
 		if (count <= 0)
 			return "";
 
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < count - 1; i++)
-			sb.append(s).append(", ");
-		sb.append(s);
+			sb.append(value).append(delimiter);
+		sb.append(value);
 		return sb.toString();
 	}
 
@@ -103,5 +158,47 @@ public class STR
 			buf[i] = padChar;
 
 		return new String(buf);
+	}
+
+	public static int toInt(String s, int defaultValue)
+	{
+		try
+		{
+			return Integer.parseInt(s);
+		}
+		catch (Exception e)
+		{
+			return defaultValue;
+		}
+	}
+
+	public static float toFloat(String s, float defaultValue)
+	{
+		try
+		{
+			return Float.parseFloat(s);
+		}
+		catch (Exception e)
+		{
+			return defaultValue;
+		}
+	}
+
+	public static double toDouble(String s, double defaultValue)
+	{
+		try
+		{
+			return Double.parseDouble(s);
+		}
+		catch (Exception e)
+		{
+			return defaultValue;
+		}
+	}
+
+	public static boolean toBoolean(String s, boolean defaultValue)
+	{
+		boolean isFalse = (s == null) || "false".equalsIgnoreCase(s) || "0".equals(s);
+		return !isFalse;
 	}
 }
