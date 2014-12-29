@@ -116,6 +116,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public V get(K key)
 	{
+		return get(key, true);
+	}
+	
+	public V get(K key, boolean cacheResult)
+	{
 		if (!usingCache)
 			return dbRead(key);
 
@@ -123,7 +128,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		if (value == null)
 		{
 			value = dbRead(key);
-			if (value != null)
+			if (cacheResult && value != null)
 				cache.put(key, value);
 		}
 		return value;
@@ -348,10 +353,10 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
 	 * <ul>
-	 * <li>using {@link KeyValueStore#replace(Object, Object)}: in such case only the {@link #dbWrite(Object)} method will be invoked. it
+	 * <li>using {@link KeyValueStore#replace(Object, Object)}: in such case only the {@link #dbUpdate(Object)} method will be invoked. it
 	 * will be passed an updated value for an existing key.
 	 * <li>using {@link KeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
-	 * generating an instance for the caller to safely modify, and then the {@link #dbWrite(Object)} method will be invoked on that modified
+	 * generating an instance for the caller to safely modify, and then the {@link #dbUpdate(Object)} method will be invoked on that modified
 	 * instance.
 	 * </ul>
 	 * both methods are invoked under the concurrency protection a lock provided with {@link KeyValueStore#getModificationLock(Object)}.
@@ -361,7 +366,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		/**
 		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #getValue()} will return
 		 * the unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process, the method
-		 * {@link #dbWrite(Object)} will be invoked.
+		 * {@link #dbUpdate(Object)} will be invoked.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
@@ -372,7 +377,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
-		void dbWrite(V value);
+		void dbUpdate(V value);
 	}
 
 	protected static enum ModificationType
@@ -472,7 +477,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			else
 			{
 				fireEvent(EventType.PreReplace, key, value);
-				modifier.dbWrite(value);
+				modifier.dbUpdate(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
@@ -509,7 +514,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			if (updater.changed)
 			{
 				fireEvent(EventType.PreCommit, key, value);
-				modifier.dbWrite(value);
+				modifier.dbUpdate(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
@@ -658,6 +663,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		protected Index(IndexMapper<V, F> mapper, String name)
 		{
 			this.mapper = mapper;
+
+			if (name == null || name.isEmpty())
+				throw new RuntimeException("index name is mandatory in " + Index.class.getSimpleName());
 			this.name = name;
 		}
 

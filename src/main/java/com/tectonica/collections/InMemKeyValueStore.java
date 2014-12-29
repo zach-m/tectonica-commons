@@ -67,7 +67,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 
 		@Override
-		public void dbWrite(V value)
+		public void dbUpdate(V value)
 		{
 			V oldEntry = _value;
 			_value = value;

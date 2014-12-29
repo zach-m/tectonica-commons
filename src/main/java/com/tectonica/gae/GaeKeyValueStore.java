@@ -33,8 +33,8 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private final Class<V> valueClass;
 	private final String kind;
 	private final Key ancestor; // dummy parent for all entities to guarantee Datastore consistency
-	private final List<GaeIndexImpl<?>> indexes;
 	private final Serializer<V> serializer;
+	private final List<GaeIndexImpl<?>> indexes;
 
 	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper)
 	{
@@ -138,12 +138,11 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			{
 				// we use here same calls as if for read-only value, because in both cases a new instance is deserialized
 				// NOTE: if we ever switch to a different implementation, with local objects, this wouldn't work
-				V value = usingCache ? cache.get(key) : null;
-				return (value != null) ? value : dbRead(key);
+				return get(key, false);
 			}
 
 			@Override
-			public void dbWrite(V value)
+			public void dbUpdate(V value)
 			{
 				save(key, value);
 			}
@@ -212,14 +211,11 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 * 
 	 * @author Zach Melamed
 	 */
-	public class GaeIndexImpl<F> extends Index<String, V, F>
+	private class GaeIndexImpl<F> extends Index<String, V, F>
 	{
 		public GaeIndexImpl(IndexMapper<V, F> mapFunc, String name)
 		{
 			super(mapFunc, name);
-
-			if (name == null || name.isEmpty())
-				throw new RuntimeException("index name is mandatory in " + GaeIndexImpl.class.getSimpleName());
 		}
 
 		@Override
@@ -277,9 +273,8 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	{
 		Entity entity = new Entity(kind, key, ancestor);
 		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(serializer.objToBytes(value)));
-		for (int i = 0; i < indexes.size(); i++)
+		for (GaeIndexImpl<?> index : indexes)
 		{
-			GaeIndexImpl<?> index = indexes.get(i);
 			Object field = (value == null) ? null : index.getIndexedFieldOf(value);
 			entity.setProperty(index.propertyName(), field);
 		}

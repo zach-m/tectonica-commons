@@ -49,7 +49,10 @@ public class STR
 	 */
 	public static <V> String implode(final V[] values, String delimiter, boolean skipBlanks)
 	{
-		Iterable<V> a = new Iterable<V>()
+		if (values == null)
+			return "";
+		
+		Iterable<V> iterable = new Iterable<V>()
 		{
 			@Override
 			public Iterator<V> iterator()
@@ -57,7 +60,7 @@ public class STR
 				return new ArrayIterator<V>(values);
 			}
 		};
-		return implode(a, delimiter, skipBlanks);
+		return implode(iterable, delimiter, skipBlanks);
 	}
 
 	private static class ArrayIterator<V> implements Iterator<V>
