@@ -7,8 +7,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -32,6 +34,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	private final JDBC jdbc;
 
 	/**
+	 * creates a new key-value store backed by Sqlite
 	 * 
 	 * @param keyMapper
 	 *            this optional parameter is suitable in situations where the key of an entry can be inferred from its value directly
@@ -48,6 +51,12 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		this.locks = new ConcurrentHashMap<>();
 		this.jdbc = SqliteUtil.connect(connStr);
 		createTable();
+	}
+
+	@Override
+	protected Cache<String, V> createCache()
+	{
+		return new InMemCache();
 	}
 
 	/***********************************************************************************
@@ -88,21 +97,21 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	}
 
 	@Override
-	protected Iterator<KeyValue<String, V>> dbIterate(final Collection<String> keys)
+	protected Iterator<KeyValue<String, V>> dbOrderedIterator(final Collection<String> keys)
 	{
-		ExecutionContext ctx = jdbc.startExecute(new ConnListener<ResultSet>()
+		return jdbc.execute(new ConnListener<Iterator<KeyValue<String, V>>>()
 		{
 			@Override
-			public ResultSet onConnection(Connection conn) throws SQLException
+			public Iterator<KeyValue<String, V>> onConnection(Connection conn) throws SQLException
 			{
 				PreparedStatement stmt = conn.prepareStatement(sqlSelectKeys(keys));
 				int i = 0;
 				for (String key : keys)
 					stmt.setString(++i, key);
-				return stmt.executeQuery();
+				List<RawKeyValue> ordered = byKeyOrder(stmt.executeQuery(), keys);
+				return entryIteratorOfRawIter(ordered.iterator());
 			}
 		});
-		return entryIteratorOfResultSet(ctx);
 	}
 
 	@Override
@@ -154,9 +163,9 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 			}
 
 			@Override
-			public void dbUpdate(final V value)
+			public void dbWrite(final V value)
 			{
-				int updated = updateRow(key, value);
+				int updated = upsertRow(key, value, false);
 				if (updated != 1)
 					throw new RuntimeException("Unexpected dbUpdate() count: " + updated);
 			}
@@ -201,7 +210,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	@Override
 	protected void dbInsert(final String key, final V value)
 	{
-		int inserted = insertRow(key, value);
+		int inserted = upsertRow(key, value, true);
 		if (inserted != 1)
 			throw new RuntimeException("Unexpected dbInsert() count: " + inserted);
 	}
@@ -347,20 +356,13 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		return String.format("SELECT K,V FROM %s WHERE K IN (%s)", table, STR.implode("?", ",", keys.size()));
 	}
 
-	private String sqlInsert()
+	private String sqlUpsert(boolean strictInsert)
 	{
+		String statement = strictInsert ? "INSERT" : "REPLACE";
 		String pfx = (indexeCols.size() > 0) ? "," : "";
 		String cols = pfx + STR.implode(indexeCols, ",", false);
 		String qm = pfx + STR.implode("?", ",", indexeCols.size());
-		return String.format("INSERT INTO %s (V,K %s) VALUES (?,? %s)", table, cols, qm);
-	}
-
-	private String sqlUpdate()
-	{
-		StringBuilder sb = new StringBuilder();
-		for (String col : indexeCols)
-			sb.append(", ").append(col).append("=?");
-		return String.format("UPDATE %s SET V=? %s WHERE K=?", table, sb.toString());
+		return String.format("%s INTO %s (K,V %s) VALUES (?,? %s)", statement, table, cols, qm);
 	}
 
 	private String sqlDeleteSingle()
@@ -526,46 +528,91 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		}
 	}
 
-	private Integer insertRow(final String key, final V value)
+	private static class RawKeyValue
 	{
-		return jdbc.execute(new ConnListener<Integer>()
-		{
-			@Override
-			protected Integer onConnection(Connection conn) throws SQLException
-			{
-				PreparedStatement stmt = conn.prepareStatement(sqlInsert());
-				stmt.setBytes(1, serializer.objToBytes(value));
-				stmt.setString(2, key);
-				prepareIndices(3, stmt, value);
-				return stmt.executeUpdate();
-			}
-		});
-	}
+		final String key;
+		final byte[] bytes;
 
-	private Integer updateRow(final String key, final V value)
-	{
-		return jdbc.execute(new ConnListener<Integer>()
+		RawKeyValue(String key, byte[] bytes)
 		{
-			@Override
-			protected Integer onConnection(Connection conn) throws SQLException
-			{
-				PreparedStatement stmt = conn.prepareStatement(sqlUpdate());
-				stmt.setBytes(1, serializer.objToBytes(value));
-				prepareIndices(2, stmt, value);
-				stmt.setString(2 + indexes.size(), key);
-				return stmt.executeUpdate();
-			}
-		});
-	}
-
-	private void prepareIndices(int startIndex, PreparedStatement stmt, V value) throws SQLException
-	{
-		for (int i = 0; i < indexes.size(); i++)
-		{
-			SqliteIndexImpl<?> index = indexes.get(i);
-			String field = (value == null) ? null : index.getIndexedFieldOf(value);
-			stmt.setString(startIndex + i, field);
+			this.key = key;
+			this.bytes = bytes;
 		}
+	}
+
+	private List<RawKeyValue> byKeyOrder(ResultSet rs, final Collection<String> keys) throws SQLException
+	{
+		Map<String, byte[]> prefetch = new HashMap<>();
+		while (rs.next())
+			prefetch.put(rs.getString(1), rs.getBytes(2));
+		List<RawKeyValue> ordered = new ArrayList<>();
+		for (String key : keys)
+		{
+			byte[] bytes = prefetch.get(key);
+			if (bytes != null)
+				ordered.add(new RawKeyValue(key, bytes));
+		}
+		return ordered;
+	}
+
+	private Iterator<KeyValue<String, V>> entryIteratorOfRawIter(final Iterator<RawKeyValue> iter)
+	{
+		return new Iterator<KeyValue<String, V>>()
+		{
+			@Override
+			public boolean hasNext()
+			{
+				return iter.hasNext();
+			}
+
+			@Override
+			public KeyValue<String, V> next()
+			{
+				final RawKeyValue rkv = iter.next();
+				return new KeyValue<String, V>()
+				{
+					@Override
+					public String getKey()
+					{
+						return rkv.key;
+					}
+
+					@Override
+					public V getValue()
+					{
+						return serializer.bytesToObj(rkv.bytes, valueClass);
+					}
+				};
+			}
+
+			@Override
+			public void remove()
+			{
+				throw new UnsupportedOperationException();
+			}
+		};
+
+	}
+
+	private Integer upsertRow(final String key, final V value, final boolean strictInsert)
+	{
+		return jdbc.execute(new ConnListener<Integer>()
+		{
+			@Override
+			protected Integer onConnection(Connection conn) throws SQLException
+			{
+				PreparedStatement stmt = conn.prepareStatement(sqlUpsert(strictInsert));
+				stmt.setString(1, key);
+				stmt.setBytes(2, serializer.objToBytes(value));
+				for (int i = 0; i < indexes.size(); i++)
+				{
+					SqliteIndexImpl<?> index = indexes.get(i);
+					String field = (value == null) ? null : index.getIndexedFieldOf(value);
+					stmt.setString(3 + i, field);
+				}
+				return stmt.executeUpdate();
+			}
+		});
 	}
 
 	/***********************************************************************************
@@ -576,9 +623,9 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 
 	public static interface Serializer<V>
 	{
-		V bytesToObj(byte[] bytes, Class<V> clz); // NOTE: if bytes is null, return null
+		V bytesToObj(byte[] bytes, Class<V> clz);
 
-		byte[] objToBytes(V obj); // NOTE: if obj is null, return null
+		byte[] objToBytes(V obj);
 
 		V copyOf(V obj);
 	}
@@ -602,4 +649,52 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 			return SerializeUtil.copyOf(obj);
 		}
 	}
+
+	/***********************************************************************************
+	 * 
+	 * CACHE IMPLEMENTATION
+	 * 
+	 ***********************************************************************************/
+
+	private class InMemCache implements Cache<String, V>
+	{
+		// based on Guava cache
+		private com.google.common.cache.Cache<String, V> cache = com.google.common.cache.CacheBuilder.newBuilder().maximumSize(1000).build();
+
+		@Override
+		public V get(String key)
+		{
+			return cache.getIfPresent(key);
+		}
+
+		@Override
+		public Map<String, V> get(Collection<String> keys)
+		{
+			return cache.getAllPresent(keys);
+		}
+
+		@Override
+		public void put(String key, V value)
+		{
+			cache.put(key, value);
+		}
+
+		@Override
+		public void put(Map<String, V> values)
+		{
+			cache.putAll(values);
+		}
+
+		@Override
+		public void delete(String key)
+		{
+			cache.invalidate(key);
+		}
+
+		@Override
+		public void deleteAll()
+		{
+			cache.invalidateAll();
+		}
+	};
 }

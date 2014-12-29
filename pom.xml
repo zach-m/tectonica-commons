@@ -37,6 +37,7 @@
 	</scm>
 
 	<properties>
+		<version.slf4j>1.7.9</version.slf4j>
 		<version.javamail>1.4.7</version.javamail>
 		<version.jackson1>1.9.2</version.jackson1>
 		<version.jackson2>2.4.2</version.jackson2>
@@ -45,6 +46,8 @@
 		<version.appengine>1.9.17</version.appengine>
 		<version.jsf>2.2.8-02</version.jsf>
 		<version.kryo>3.0.0</version.kryo>
+		<version.sqlite>3.8.7</version.sqlite>
+		<version.guava>18.0</version.guava>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
@@ -128,15 +131,23 @@
 		<dependency>
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>
-			<version>3.8.7</version>
-			<scope>pprovided</scope>
+			<version>${version.sqlite}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- GUAVA (FOR IN-MEM CACHING) -->
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>${version.guava}</version>
+			<scope>provided</scope>
 		</dependency>
 
 		<!-- Logging -->
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
-			<version>1.7.9</version>
+			<version>${version.slf4j}</version>
 		</dependency>
 
 		<!-- Testing -->

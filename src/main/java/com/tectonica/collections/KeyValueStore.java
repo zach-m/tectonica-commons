@@ -107,7 +107,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	protected abstract V dbRead(K key);
 
-	protected abstract Iterator<KeyValue<K, V>> dbIterate(Collection<K> keys);
+	protected abstract Iterator<KeyValue<K, V>> dbOrderedIterator(Collection<K> keys);
 
 	@Override
 	public abstract Iterator<KeyValue<K, V>> iterator(); // gets ALL entries, bypasses cache
@@ -118,7 +118,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	{
 		return get(key, true);
 	}
-	
+
 	public V get(K key, boolean cacheResult)
 	{
 		if (!usingCache)
@@ -145,7 +145,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			return Collections.emptyIterator();
 
 		if (!usingCache)
-			return dbIterate(keys);
+			return dbOrderedIterator(keys);
 
 		final Map<K, V> cachedValues = cache.get(keys);
 
@@ -167,7 +167,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			if (uncachedKeys.isEmpty())
 				dbIter = Collections.emptyIterator(); // possible only when duplicate keys were passed as input
 			else
-				dbIter = dbIterate(uncachedKeys);
+				dbIter = dbOrderedIterator(uncachedKeys);
 		}
 
 		return new Iterator<KeyValue<K, V>>()
@@ -353,11 +353,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
 	 * <ul>
-	 * <li>using {@link KeyValueStore#replace(Object, Object)}: in such case only the {@link #dbUpdate(Object)} method will be invoked. it
-	 * will be passed an updated value for an existing key.
+	 * <li>using {@link KeyValueStore#set(Object, Object)}: in such case only the {@link #dbWrite(Object)} method will be invoked. it will
+	 * be passed an updated value for an existing key.
 	 * <li>using {@link KeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
-	 * generating an instance for the caller to safely modify, and then the {@link #dbUpdate(Object)} method will be invoked on that modified
-	 * instance.
+	 * generating an instance for the caller to safely modify, and then the {@link #dbWrite(Object)} method will be invoked on that
+	 * modified instance.
 	 * </ul>
 	 * both methods are invoked under the concurrency protection a lock provided with {@link KeyValueStore#getModificationLock(Object)}.
 	 */
@@ -366,18 +366,19 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		/**
 		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #getValue()} will return
 		 * the unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process, the method
-		 * {@link #dbUpdate(Object)} will be invoked.
+		 * {@link #dbWrite(Object)} will be invoked.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
 		V getModifiableValue();
 
 		/**
-		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link #getValue()} will return the updated value.
+		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link KeyValueStore#get(Object, boolean)} will
+		 * return the updated value.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
-		void dbUpdate(V value);
+		void dbWrite(V value);
 	}
 
 	protected static enum ModificationType
@@ -429,7 +430,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		 * <p>
 		 * IMPORTANT: do not make any modifications to the passed entry inside this method
 		 */
-		public void postCommit(V value)
+		public void postPersist(V value)
 		{}
 
 		/**
@@ -450,10 +451,10 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	/**
 	 * inserts a new entry, whose key doesn't already exist in storage. it's a faster and more resource-efficient way to insert entries
-	 * compared to {@link #replace(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
-	 * already exists. the behaviour of the store in such case is undetermined and implementation-dependent.
+	 * compared to {@link #set(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
+	 * already exists. the behavior of the store in such case is undetermined and implementation-dependent.
 	 */
-	public void insert(K key, V value)
+	public void add(K key, V value)
 	{
 		fireEvent(EventType.PreInsert, key, value);
 		dbInsert(key, value);
@@ -463,9 +464,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	/**
 	 * inserts or updates an entry. if you're sure that the entry is new (i.e. its key doesn't already exist), use the more efficient
-	 * {@link #insert(Object, Object)} instead
+	 * {@link #add(Object, Object)} instead
 	 */
-	public void replace(K key, V value)
+	public void set(K key, V value)
 	{
 		Lock lock = getModificationLock(key);
 		lock.lock();
@@ -473,11 +474,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		{
 			Modifier<K, V> modifier = getModifier(key, ModificationType.REPLACE);
 			if (modifier == null)
-				insert(key, value);
+				add(key, value);
 			else
 			{
 				fireEvent(EventType.PreReplace, key, value);
-				modifier.dbUpdate(value);
+				modifier.dbWrite(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
@@ -514,12 +515,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			if (updater.changed)
 			{
 				fireEvent(EventType.PreCommit, key, value);
-				modifier.dbUpdate(value);
+				modifier.dbWrite(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
 
-			updater.postCommit(value);
+			updater.postPersist(value);
 
 			return value;
 		}
@@ -567,21 +568,21 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * convenience method applicable when {@code keyMapper} is provided
 	 * 
-	 * @see {@link #insert(Object, Object)}
+	 * @see {@link #add(Object, Object)}
 	 */
-	public void insertValue(V value)
+	public void addValue(V value)
 	{
-		insert(keyMapper.getKeyOf(value), value);
+		add(keyMapper.getKeyOf(value), value);
 	}
 
 	/**
 	 * convenience method applicable when {@code keyMapper} is provided
 	 * 
-	 * @see {@link #replace(Object, Object)}
+	 * @see {@link #set(Object, Object)}
 	 */
-	public void replaceValue(V value)
+	public void setValue(V value)
 	{
-		replace(keyMapper.getKeyOf(value), value);
+		set(keyMapper.getKeyOf(value), value);
 	}
 
 	/* *********************************************************************************

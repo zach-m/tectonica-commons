@@ -67,7 +67,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 		}
 
 		@Override
-		public void dbUpdate(V value)
+		public void dbWrite(V value)
 		{
 			V oldEntry = _value;
 			_value = value;
@@ -104,7 +104,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	}
 
 	@Override
-	protected Iterator<KeyValue<K, V>> dbIterate(Collection<K> keys)
+	protected Iterator<KeyValue<K, V>> dbOrderedIterator(Collection<K> keys)
 	{
 		List<KeyValue<K, V>> list = new ArrayList<>();
 		for (K key : keys)

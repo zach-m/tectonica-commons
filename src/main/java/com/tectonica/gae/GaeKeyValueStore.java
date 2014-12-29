@@ -106,7 +106,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	}
 
 	@Override
-	protected Iterator<KeyValue<String, V>> dbIterate(Collection<String> keys)
+	protected Iterator<KeyValue<String, V>> dbOrderedIterator(Collection<String> keys)
 	{
 		if (keys.size() > 30)
 			throw new RuntimeException("GAE doesn't support more than 30 at the time, need to break it");
@@ -142,7 +142,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			}
 
 			@Override
-			public void dbUpdate(V value)
+			public void dbWrite(V value)
 			{
 				save(key, value);
 			}
