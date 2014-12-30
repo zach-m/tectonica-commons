@@ -105,12 +105,23 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * *********************************************************************************
 	 */
 
-	protected abstract V dbRead(K key);
+	/**
+	 * Given a key, retrieves its paired value directly from the storage
+	 */
+	protected abstract V dbGet(K key);
 
+	/**
+	 * Retrieves the entries indicated by the given keys directly from the storage
+	 * <p>
+	 * See {@link #iteratorFor(Collection, boolean)} for the restrictions on the resulting iterator
+	 */
 	protected abstract Iterator<KeyValue<K, V>> dbOrderedIterator(Collection<K> keys);
 
+	/**
+	 * Returns ALL entries, bypassing cache entirely (read and write)
+	 */
 	@Override
-	public abstract Iterator<KeyValue<K, V>> iterator(); // gets ALL entries, bypasses cache
+	public abstract Iterator<KeyValue<K, V>> iterator();
 
 	// ///////////////////////////////////////////////////////////////////////////////////////
 
@@ -122,23 +133,39 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	public V get(K key, boolean cacheResult)
 	{
 		if (!usingCache)
-			return dbRead(key);
+			return dbGet(key);
 
 		V value = cache.get(key);
 		if (value == null)
 		{
-			value = dbRead(key);
+			value = dbGet(key);
 			if (cacheResult && value != null)
 				cache.put(key, value);
 		}
 		return value;
 	}
 
+	/**
+	 * Executes {@link #iteratorFor(Collection, boolean)} with {@code postponeCaching} set to false
+	 */
 	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys)
 	{
 		return iteratorFor(keys, false);
 	}
 
+	/**
+	 * Returns an iterator for a list of entries whose keys were passed to the method
+	 * <p>
+	 * <b>IMPORTANT:</b> Unlike simple 'SELECT WHERE KEY IN (..)', the list returned here is guaranteed to be at the exact same order of the
+	 * keys passed. Moreover, if a certain key is passed more than once, so will its corresponding entry. Clearly, if a key doesn't exist in
+	 * the store, it will be skipped (i.e. the returning list will never contain nulls).
+	 * 
+	 * @param keys
+	 *            ordered collection of keys to lookup (this is not necessarily a set, as keys can appear more than once in the collection)
+	 * @param postponeCaching
+	 *            indicates whether cache entries individually as each is read from the backend storage, or cache them all in a single call
+	 *            at the end of the iteration (use only if you'll certainly iterate through the entire result)
+	 */
 	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys, final boolean postponeCaching)
 	{
 		if (keys.isEmpty())
@@ -147,15 +174,18 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		if (!usingCache)
 			return dbOrderedIterator(keys);
 
+		// we intend to use cached results of at least some of the keys passed. the general goal is to find out which keys are missing,
+		// retrieve them separately from the storage, and then merge into a single list the cached and retrieved entries
+
 		final Map<K, V> cachedValues = cache.get(keys);
 
 		final Iterator<KeyValue<K, V>> dbIter;
 		if (cachedValues.size() == keys.size())
-			dbIter = Collections.emptyIterator(); // all keys were found in cache
+			dbIter = Collections.emptyIterator(); // i.e. all keys were found in cache
 		else
 		{
 			final Collection<K> uncachedKeys;
-			if (cachedValues.size() == 0) // no key was found on cache
+			if (cachedValues.size() == 0) // i.e. no key was found on cache
 				uncachedKeys = keys;
 			else
 			{
@@ -353,11 +383,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
 	 * <ul>
-	 * <li>using {@link KeyValueStore#set(Object, Object)}: in such case only the {@link #dbWrite(Object)} method will be invoked. it will
-	 * be passed an updated value for an existing key.
+	 * <li>using {@link KeyValueStore#put(Object, Object)}: in such case only the {@link #dbPut(Object)} method will be invoked. it will be
+	 * passed an updated value for an existing key.
 	 * <li>using {@link KeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
-	 * generating an instance for the caller to safely modify, and then the {@link #dbWrite(Object)} method will be invoked on that
-	 * modified instance.
+	 * generating an instance for the caller to safely modify, and then the {@link #dbPut(Object)} method will be invoked on that modified
+	 * instance.
 	 * </ul>
 	 * both methods are invoked under the concurrency protection a lock provided with {@link KeyValueStore#getModificationLock(Object)}.
 	 */
@@ -366,7 +396,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		/**
 		 * Returns an instance that can be safely modified by the caller. During this modification, calls to {@link #getValue()} will return
 		 * the unchanged value. If the instance was indeed modified by the caller, and no exception occurred in the process, the method
-		 * {@link #dbWrite(Object)} will be invoked.
+		 * {@link #dbPut(Object)} will be invoked.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
@@ -378,7 +408,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
 		 */
-		void dbWrite(V value);
+		void dbPut(V value);
 	}
 
 	protected static enum ModificationType
@@ -451,7 +481,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	/**
 	 * inserts a new entry, whose key doesn't already exist in storage. it's a faster and more resource-efficient way to insert entries
-	 * compared to {@link #set(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
+	 * compared to {@link #put(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
 	 * already exists. the behavior of the store in such case is undetermined and implementation-dependent.
 	 */
 	public void add(K key, V value)
@@ -466,7 +496,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * inserts or updates an entry. if you're sure that the entry is new (i.e. its key doesn't already exist), use the more efficient
 	 * {@link #add(Object, Object)} instead
 	 */
-	public void set(K key, V value)
+	public void put(K key, V value)
 	{
 		Lock lock = getModificationLock(key);
 		lock.lock();
@@ -478,7 +508,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			else
 			{
 				fireEvent(EventType.PreReplace, key, value);
-				modifier.dbWrite(value);
+				modifier.dbPut(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
@@ -515,7 +545,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			if (updater.changed)
 			{
 				fireEvent(EventType.PreCommit, key, value);
-				modifier.dbWrite(value);
+				modifier.dbPut(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
@@ -578,11 +608,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * convenience method applicable when {@code keyMapper} is provided
 	 * 
-	 * @see {@link #set(Object, Object)}
+	 * @see {@link #put(Object, Object)}
 	 */
-	public void setValue(V value)
+	public void putValue(V value)
 	{
-		set(keyMapper.getKeyOf(value), value);
+		put(keyMapper.getKeyOf(value), value);
 	}
 
 	/* *********************************************************************************

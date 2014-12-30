@@ -75,7 +75,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 ***********************************************************************************/
 
 	@Override
-	protected V dbRead(String key)
+	protected V dbGet(String key)
 	{
 		try
 		{
@@ -142,7 +142,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			}
 
 			@Override
-			public void dbWrite(V value)
+			public void dbPut(V value)
 			{
 				save(key, value);
 			}

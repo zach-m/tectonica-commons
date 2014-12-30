@@ -10,7 +10,7 @@ To use in your project, add the following to your `pom.xml`:
 	<dependency>
 		<groupId>com.tectonica</groupId>
 		<artifactId>tectonica-commons</artifactId>
-		<version>0.4.3</version>
+		<version>0.4.4</version>
 	</dependency>
 
  

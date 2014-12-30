@@ -66,7 +66,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	 ***********************************************************************************/
 
 	@Override
-	protected V dbRead(final String key)
+	protected V dbGet(final String key)
 	{
 		return jdbc.execute(new ConnListener<V>()
 		{
@@ -159,11 +159,11 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 				V value = usingCache ? cache.get(key) : null;
 				if (value != null) // if we get a (local, in-memory) copy from the cache, we have to return a duplicate
 					return serializer.copyOf(value);
-				return dbRead(key);
+				return dbGet(key);
 			}
 
 			@Override
-			public void dbWrite(final V value)
+			public void dbPut(final V value)
 			{
 				int updated = upsertRow(key, value, false);
 				if (updated != 1)
@@ -186,19 +186,19 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	{
 		private static final long serialVersionUID = 1L;
 
-//		private final String key;
+		private final String key;
 
 		public SelfRemoveLock(String key)
 		{
-//			this.key = key;
+			this.key = key;
 		}
 
-//		@Override
-//		public void unlock()
-//		{
-//			locks.remove(key); // TODO: this may remove after another got it (Lock existing)
-//			super.unlock();
-//		}
+		@Override
+		public void unlock()
+		{
+			locks.remove(key); // TODO: concurrency bug! this may remove from map after another thread got it
+			super.unlock();
+		}
 	}
 
 	/***********************************************************************************
@@ -659,7 +659,8 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	private class InMemCache implements Cache<String, V>
 	{
 		// based on Guava cache
-		private com.google.common.cache.Cache<String, V> cache = com.google.common.cache.CacheBuilder.newBuilder().maximumSize(1000).build();
+		private com.google.common.cache.Cache<String, V> cache = com.google.common.cache.CacheBuilder.newBuilder().maximumSize(1000)
+				.build();
 
 		@Override
 		public V get(String key)
