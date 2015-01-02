@@ -819,4 +819,40 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 			}
 		};
 	}
+
+	protected static class RawKeyValue<K, V> implements KeyValue<K, V>
+	{
+		private final K key;
+		private final V value;
+
+		public RawKeyValue(K key, V value)
+		{
+			this.key = key;
+			this.value = value;
+		}
+
+		@Override
+		public K getKey()
+		{
+			return key;
+		}
+
+		@Override
+		public V getValue()
+		{
+			return value;
+		}
+	}
+
+	protected static <K, V> List<KeyValue<K, V>> orderByKeys(Map<K, V> entries, Collection<K> keys)
+	{
+		List<KeyValue<K, V>> ordered = new ArrayList<>();
+		for (K key : keys)
+		{
+			V value = entries.get(key);
+			if (value != null)
+				ordered.add(new RawKeyValue<K, V>(key, value));
+		}
+		return ordered;
+	}
 }

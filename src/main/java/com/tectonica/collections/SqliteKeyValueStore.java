@@ -108,8 +108,16 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 				int i = 0;
 				for (String key : keys)
 					stmt.setString(++i, key);
-				List<RawKeyValue> ordered = byKeyOrder(stmt.executeQuery(), keys);
-				return entryIteratorOfRawIter(ordered.iterator());
+
+				// fetch all results into memory
+				Map<String, byte[]> prefetch = new HashMap<>();
+				ResultSet rs = stmt.executeQuery();
+				while (rs.next())
+					prefetch.put(rs.getString(1), rs.getBytes(2));
+
+				// sort by the same order of the keys passed by the user
+				List<KeyValue<String, byte[]>> ordered = orderByKeys(prefetch, keys);
+				return entryIteratorOfBytesIter(ordered.iterator());
 			}
 		});
 	}
@@ -528,34 +536,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		}
 	}
 
-	private static class RawKeyValue
-	{
-		final String key;
-		final byte[] bytes;
-
-		RawKeyValue(String key, byte[] bytes)
-		{
-			this.key = key;
-			this.bytes = bytes;
-		}
-	}
-
-	private List<RawKeyValue> byKeyOrder(ResultSet rs, final Collection<String> keys) throws SQLException
-	{
-		Map<String, byte[]> prefetch = new HashMap<>();
-		while (rs.next())
-			prefetch.put(rs.getString(1), rs.getBytes(2));
-		List<RawKeyValue> ordered = new ArrayList<>();
-		for (String key : keys)
-		{
-			byte[] bytes = prefetch.get(key);
-			if (bytes != null)
-				ordered.add(new RawKeyValue(key, bytes));
-		}
-		return ordered;
-	}
-
-	private Iterator<KeyValue<String, V>> entryIteratorOfRawIter(final Iterator<RawKeyValue> iter)
+	private Iterator<KeyValue<String, V>> entryIteratorOfBytesIter(final Iterator<KeyValue<String, byte[]>> iter)
 	{
 		return new Iterator<KeyValue<String, V>>()
 		{
@@ -568,19 +549,19 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 			@Override
 			public KeyValue<String, V> next()
 			{
-				final RawKeyValue rkv = iter.next();
+				final KeyValue<String, byte[]> rkv = iter.next();
 				return new KeyValue<String, V>()
 				{
 					@Override
 					public String getKey()
 					{
-						return rkv.key;
+						return rkv.getKey();
 					}
 
 					@Override
 					public V getValue()
 					{
-						return serializer.bytesToObj(rkv.bytes, valueClass);
+						return serializer.bytesToObj(rkv.getValue(), valueClass);
 					}
 				};
 			}
