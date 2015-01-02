@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.locks.Lock;
 
+import org.nustaq.serialization.FSTConfiguration;
+
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -420,6 +422,30 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		public byte[] objToBytes(V obj)
 		{
 			return KryoUtil.objToBytes(obj);
+		}
+	}
+
+	public static class FstSerializer<V> implements Serializer<V>
+	{
+		final FSTConfiguration conf;
+
+		public FstSerializer()
+		{
+			conf = FSTConfiguration.createDefaultConfiguration();
+			conf.setShareReferences(false); // no circular references
+		}
+
+		@SuppressWarnings("unchecked")
+		@Override
+		public V bytesToObj(byte[] bytes, Class<V> clz)
+		{
+			return (bytes == null) ? null : (V) conf.asObject(bytes);
+		}
+
+		@Override
+		public byte[] objToBytes(V obj)
+		{
+			return (obj == null) ? null : conf.asByteArray(obj);
 		}
 	}
 

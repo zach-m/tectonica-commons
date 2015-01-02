@@ -4,7 +4,7 @@
 
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.4.4</version>
+	<version>0.4.5-SNAPSHOT</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide lightweight solutions for common situations</description>
@@ -119,11 +119,17 @@
 			<scope>provided</scope>
 		</dependency>
 
-		<!-- Kryo -->
+		<!-- Serialization -->
 		<dependency>
 			<groupId>com.esotericsoftware</groupId>
 			<artifactId>kryo</artifactId>
 			<version>${version.kryo}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>de.ruedigermoeller</groupId>
+			<artifactId>fst</artifactId>
+			<version>2.18</version>
 			<scope>provided</scope>
 		</dependency>
 
