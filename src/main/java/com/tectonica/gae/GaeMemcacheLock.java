@@ -49,7 +49,7 @@ public class GaeMemcacheLock implements Lock
 	// //////////////////////////////////////////////////////////////////////////////////////////
 
 	private AtomicInteger refCount = new AtomicInteger(0);
-	private static Map<String, GaeMemcacheLock> locks = new ConcurrentHashMap<>();
+	private static Map<String, GaeMemcacheLock> locks = new ConcurrentHashMap<>(); // NOTE: under current implementation can be HashMap
 
 	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked)
 	{
@@ -58,7 +58,7 @@ public class GaeMemcacheLock implements Lock
 
 	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked, boolean locallyFair, long sleepBetweenRetriesMS)
 	{
-		synchronized (locks)
+		synchronized (locks) // TODO: implement without locking the entire map
 		{
 			GaeMemcacheLock lock = locks.get(globalName);
 			if (lock == null)

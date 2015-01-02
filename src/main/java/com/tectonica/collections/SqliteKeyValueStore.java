@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -30,7 +30,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	private final Serializer<V> serializer;
 	private final List<SqliteIndexImpl<?>> indexes;
 	private final List<String> indexeCols;
-	private final ConcurrentHashMap<String, Lock> locks;
+	private final Map<String, SelfRemoveLock> locks;
 	private final JDBC jdbc;
 
 	/**
@@ -48,7 +48,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		this.serializer = new JavaSerializer<V>();
 		this.indexes = new ArrayList<>();
 		this.indexeCols = new ArrayList<>();
-		this.locks = new ConcurrentHashMap<>();
+		this.locks = new HashMap<>();
 		this.jdbc = SqliteUtil.connect(connStr);
 		createTable();
 	}
@@ -183,17 +183,23 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	@Override
 	protected Lock getModificationLock(String key)
 	{
-		Lock lock;
-		Lock existing = locks.putIfAbsent(key, lock = new SelfRemoveLock(key));
-		if (existing != null)
-			lock = existing;
-		return lock;
+		synchronized (locks) // TODO: implement without locking the entire map
+		{
+			SelfRemoveLock lock;
+			if (!locks.containsKey(key))
+				locks.put(key, lock = new SelfRemoveLock(key));
+			else
+				lock = locks.get(key);
+			lock.refCount.incrementAndGet();
+			return lock;
+		}
 	}
 
 	private class SelfRemoveLock extends ReentrantLock
 	{
 		private static final long serialVersionUID = 1L;
 
+		private final AtomicInteger refCount = new AtomicInteger(0);
 		private final String key;
 
 		public SelfRemoveLock(String key)
@@ -204,8 +210,12 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		@Override
 		public void unlock()
 		{
-			locks.remove(key); // TODO: concurrency bug! this may remove from map after another thread got it
 			super.unlock();
+			synchronized (locks)
+			{
+				if (refCount.decrementAndGet() == 0)
+					locks.remove(key);
+			}
 		}
 	}
 

@@ -97,7 +97,7 @@ public abstract class TestKeyValueStore
 		System.err.println("[TEST]  " + (l = bundleToTopicId.valuesOf(Topic.bundle("type3", TopicKind.AAA))));
 		assertEquals(l, Arrays.asList(t4));
 		System.err.println("-----------------------------------------------");
-		store.put("004", new Topic("004", "type0", TopicKind.AAA));
+		store.putValue(new Topic("004", "type0", TopicKind.AAA));
 		System.err.println("[TEST]  " + "-- Only type3 After removal 2:");
 		System.err.println("[TEST]  " + (l = bundleToTopicId.valuesOf(Topic.bundle("type3", TopicKind.AAA))));
 		assertTrue(l.size() == 0);
