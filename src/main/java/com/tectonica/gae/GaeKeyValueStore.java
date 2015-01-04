@@ -11,6 +11,7 @@ import java.util.concurrent.locks.Lock;
 
 import org.nustaq.serialization.FSTConfiguration;
 
+import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -30,7 +31,7 @@ import com.tectonica.util.SerializeUtil;
 
 public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
 {
-	private static DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
+	private final DatastoreService ds;
 
 	private final Class<V> valueClass;
 	private final String kind;
@@ -50,6 +51,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			throw new NullPointerException("valueClass");
 		if (serializer == null)
 			throw new NullPointerException("serializer");
+		this.ds = DatastoreServiceFactory.getDatastoreService();
 		this.valueClass = valueClass;
 		this.kind = valueClass.getSimpleName();
 		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
@@ -455,10 +457,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	 * 
 	 ***********************************************************************************/
 
-	private class JavaSerializeCache implements Cache<String, V>
+	private abstract class MemcachedBasedCache implements Cache<String, V>
 	{
-		private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
+		protected MemcacheService mc = MemcacheServiceFactory.getMemcacheService(NamespaceManager.get() + kind);
+	}
 
+	private class JavaSerializeCache extends MemcachedBasedCache
+	{
 		@Override
 		@SuppressWarnings("unchecked")
 		public V get(String key)
@@ -498,10 +503,8 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		}
 	};
 
-	private class CustomSerializeCache implements Cache<String, V>
+	private class CustomSerializeCache extends MemcachedBasedCache
 	{
-		private MemcacheService mc = MemcacheServiceFactory.getMemcacheService(kind);
-
 		@Override
 		public V get(String key)
 		{
