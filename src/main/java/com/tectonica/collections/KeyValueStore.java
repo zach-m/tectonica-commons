@@ -53,6 +53,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	protected KeyValueStore(KeyMapper<K, V> keyMapper)
 	{
 		this.keyMapper = keyMapper;
+		initializeCache();
+	}
+
+	protected void initializeCache()
+	{
 		cache = createCache();
 		usingCache = (cache != null);
 	}
@@ -62,6 +67,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 * CACHE
 	 * 
 	 ***********************************************************************************/
+
+	protected Cache<K, V> cache;
+	protected boolean usingCache;
 
 	protected static interface Cache<K, V>
 	{
@@ -91,9 +99,6 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		if (usingCache)
 			cache.deleteAll();
 	}
-
-	protected final Cache<K, V> cache;
-	protected final boolean usingCache;
 
 	/* *********************************************************************************
 	 * 

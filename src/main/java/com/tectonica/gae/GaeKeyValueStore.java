@@ -34,6 +34,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private final DatastoreService ds;
 
 	private final Class<V> valueClass;
+	private final String namespace;
 	private final String kind;
 	private final Key ancestor; // dummy parent for all entities to guarantee Datastore consistency
 	private final Serializer<V> serializer;
@@ -41,35 +42,53 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 
 	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper)
 	{
-		this(valueClass, keyMapper, new JavaSerializer<V>());
+		this(valueClass, null, keyMapper, null);
 	}
 
-	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper, Serializer<V> serializer)
+	public GaeKeyValueStore(Class<V> valueClass, String namespace, KeyMapper<String, V> keyMapper)
+	{
+		this(valueClass, namespace, keyMapper, null);
+	}
+
+	public GaeKeyValueStore(Class<V> valueClass, String namespace, KeyMapper<String, V> keyMapper, Serializer<V> serializer)
 	{
 		super(keyMapper);
 		if (valueClass == null)
 			throw new NullPointerException("valueClass");
 		if (serializer == null)
-			throw new NullPointerException("serializer");
+			serializer = new JavaSerializer<V>();
+		this.namespace = namespace;
+		NamespaceManager.set(namespace);
 		this.ds = DatastoreServiceFactory.getDatastoreService();
 		this.valueClass = valueClass;
 		this.kind = valueClass.getSimpleName();
 		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
 		this.indexes = new ArrayList<>();
 		this.serializer = serializer;
+
+		// create cache now that all values (specifically 'kind') are initialized
+		super.initializeCache();
 	}
 
-	private Key keyOf(String key)
+	@Override
+	protected void initializeCache()
 	{
-		return KeyFactory.createKey(ancestor, kind, key);
+		// prevent execution of the parent's attempt to create cache, we'll call it manually when we're ready
 	}
 
 	@Override
 	protected Cache<String, V> createCache()
 	{
+		// we're returning a memcached-based wrapper here, so the 'kind' property needs to be set
 		if (serializer instanceof JavaSerializer)
 			return new JavaSerializeCache();
 		return new CustomSerializeCache();
+	}
+
+	private Key keyOf(String key)
+	{
+		NamespaceManager.set(namespace);
+		return KeyFactory.createKey(ancestor, kind, key);
 	}
 
 	/***********************************************************************************
@@ -292,6 +311,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 
 	private Query newQuery()
 	{
+		NamespaceManager.set(namespace);
 		return new Query(kind).setAncestor(ancestor);
 	}
 
@@ -459,7 +479,14 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 
 	private abstract class MemcachedBasedCache implements Cache<String, V>
 	{
-		protected MemcacheService mc = MemcacheServiceFactory.getMemcacheService(NamespaceManager.get() + kind);
+		protected final MemcacheService mc;
+
+		protected MemcachedBasedCache()
+		{
+			String gaeNS = NamespaceManager.get();
+			String mcNS = (gaeNS == null) ? kind : gaeNS + "-" + kind;
+			mc = MemcacheServiceFactory.getMemcacheService(mcNS);
+		}
 	}
 
 	private class JavaSerializeCache extends MemcachedBasedCache
