@@ -58,13 +58,14 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		if (serializer == null)
 			serializer = new JavaSerializer<V>();
 		this.namespace = namespace;
-		NamespaceManager.set(namespace);
-		this.ds = DatastoreServiceFactory.getDatastoreService();
 		this.valueClass = valueClass;
 		this.kind = valueClass.getSimpleName();
-		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
 		this.indexes = new ArrayList<>();
 		this.serializer = serializer;
+
+		NamespaceManager.set(namespace);
+		this.ds = DatastoreServiceFactory.getDatastoreService();
+		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
 
 		// create cache now that all values (specifically 'kind') are initialized
 		super.initializeCache();

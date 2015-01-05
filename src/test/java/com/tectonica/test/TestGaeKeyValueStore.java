@@ -47,7 +47,7 @@ public class TestGaeKeyValueStore extends TestKeyValueStore
 	@Override
 	protected KeyValueStore<String, Topic> createStore()
 	{
-		return new GaeKeyValueStore<>(Topic.class, keyMapper);
+		return new GaeKeyValueStore<>(Topic.class, "ns", keyMapper);
 	}
 
 	@Test
