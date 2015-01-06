@@ -378,6 +378,12 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return iterateInto(valueIteratorFor(keys, true), new ArrayList<V>());
 	}
 
+	public boolean isExists(K key)
+	{
+		// NOTE: the implementation here avoid serialization, but does caching. you'll probably want to override..
+		return iteratorFor(Collections.singletonList(key)).hasNext();
+	}
+
 	/* *********************************************************************************
 	 * 
 	 * SETTERS (PROTOCOL)
@@ -418,7 +424,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	protected static enum ModificationType
 	{
-		UPDATE, REPLACE;
+		UPDATE, PUT;
 	}
 
 	/**
@@ -475,6 +481,11 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		{}
 	}
 
+	public static interface ValueGenerator<K, V>
+	{
+		V generate(K key);
+	}
+
 	/* *********************************************************************************
 	 * 
 	 * SETTERS
@@ -491,7 +502,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 */
 	public void add(K key, V value)
 	{
-		fireEvent(EventType.PreInsert, key, value);
+		fireEvent(EventType.PreAdd, key, value);
 		dbInsert(key, value);
 		if (usingCache)
 			cache.put(key, value);
@@ -507,16 +518,41 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		lock.lock();
 		try
 		{
-			Modifier<K, V> modifier = getModifier(key, ModificationType.REPLACE);
+			Modifier<K, V> modifier = getModifier(key, ModificationType.PUT);
 			if (modifier == null)
 				add(key, value);
 			else
 			{
-				fireEvent(EventType.PreReplace, key, value);
+				fireEvent(EventType.PrePut, key, value);
 				modifier.dbPut(value);
 				if (usingCache)
 					cache.put(key, value);
 			}
+		}
+		finally
+		{
+			lock.unlock();
+		}
+	}
+
+	/**
+	 * insert and entry only if the key is not yet taken
+	 * 
+	 * @return
+	 *         the newly added value, or null if nothing was inserted
+	 */
+	public V putIfAbsent(K key, ValueGenerator<K, V> generator)
+	{
+		Lock lock = getModificationLock(key);
+		lock.lock();
+		try
+		{
+			if (isExists(key))
+				return null;
+
+			V value = generator.generate(key);
+			add(key, value);
+			return value;
 		}
 		finally
 		{
@@ -549,7 +585,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 			if (updater.changed)
 			{
-				fireEvent(EventType.PreCommit, key, value);
+				fireEvent(EventType.PrePersistUpdate, key, value);
 				modifier.dbPut(value);
 				if (usingCache)
 					cache.put(key, value);
@@ -656,7 +692,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 	public static enum EventType
 	{
-		PreUpdate, PreCommit, PreInsert, PreReplace;
+		PreUpdate, PrePersistUpdate, PreAdd, PrePut;
 	}
 
 	public interface EventHandler<K, V>
