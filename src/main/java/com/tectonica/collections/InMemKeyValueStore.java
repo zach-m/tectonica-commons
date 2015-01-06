@@ -121,6 +121,12 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	{
 		return entries.keySet();
 	}
+	
+	@Override
+	public boolean containsKey(K key)
+	{
+		return entries.containsKey(key);
+	}
 
 	/***********************************************************************************
 	 * 

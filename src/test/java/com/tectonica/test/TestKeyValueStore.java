@@ -2,6 +2,7 @@ package com.tectonica.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -64,6 +65,10 @@ public abstract class TestKeyValueStore
 		store.addValue(t3 = new Topic("003", "type3", TopicKind.AAA));
 		store.addValue(t4 = new Topic("004", "type3", TopicKind.AAA));
 		store.clearCache();
+		
+		assertTrue(store.containsKey("001"));
+		assertFalse(store.containsKey("xxx"));
+		
 		System.err.println("-----------------------------------------------");
 		System.err.println("[TEST]  " + (t = store.get("001")));
 		assertEquals(t, t1);

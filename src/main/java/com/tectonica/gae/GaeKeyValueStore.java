@@ -33,37 +33,57 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 {
 	private final DatastoreService ds;
 
-	private final Class<V> valueClass;
-	private final String namespace;
+	private final Config<V> config;
 	private final String kind;
 	private final Key ancestor; // dummy parent for all entities to guarantee Datastore consistency
-	private final Serializer<V> serializer;
 	private final List<GaeIndexImpl<?>> indexes;
 
-	public GaeKeyValueStore(Class<V> valueClass, KeyMapper<String, V> keyMapper)
+	public static class Config<V>
 	{
-		this(valueClass, null, keyMapper, null);
+		private final Class<V> valueClass;
+		private Serializer<V> serializer;
+		private String namespace;
+		private boolean usingNamespace = false;
+
+		public static <V> Config<V> create(Class<V> valueClass)
+		{
+			return new Config<V>(valueClass);
+		}
+
+		private Config(Class<V> valueClass)
+		{
+			if (valueClass == null)
+				throw new NullPointerException("valueClass");
+			this.valueClass = valueClass;
+		}
+
+		public Config<V> withSerializer(Serializer<V> serializer)
+		{
+			this.serializer = serializer;
+			return this;
+		}
+
+		public Config<V> withNamespace(String namespace)
+		{
+			this.namespace = namespace;
+			this.usingNamespace = true;
+			return this;
+		}
 	}
 
-	public GaeKeyValueStore(Class<V> valueClass, String namespace, KeyMapper<String, V> keyMapper)
-	{
-		this(valueClass, namespace, keyMapper, null);
-	}
-
-	public GaeKeyValueStore(Class<V> valueClass, String namespace, KeyMapper<String, V> keyMapper, Serializer<V> serializer)
+	public GaeKeyValueStore(Config<V> config, KeyMapper<String, V> keyMapper)
 	{
 		super(keyMapper);
-		if (valueClass == null)
-			throw new NullPointerException("valueClass");
-		if (serializer == null)
-			serializer = new JavaSerializer<V>();
-		this.namespace = namespace;
-		this.valueClass = valueClass;
-		this.kind = valueClass.getSimpleName();
-		this.indexes = new ArrayList<>();
-		this.serializer = serializer;
+		if (config == null)
+			throw new NullPointerException("config");
+		if (config.serializer == null)
+			config.serializer = new JavaSerializer<V>();
 
-		NamespaceManager.set(namespace);
+		this.config = config;
+		this.kind = config.valueClass.getSimpleName();
+		this.indexes = new ArrayList<>();
+
+		applyNamespace(); // needed before creation of key and initialization of cache
 		this.ds = DatastoreServiceFactory.getDatastoreService();
 		this.ancestor = KeyFactory.createKey(kind, BOGUS_ANCESTOR_KEY_NAME);
 
@@ -81,15 +101,21 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	protected Cache<String, V> createCache()
 	{
 		// we're returning a memcached-based wrapper here, so the 'kind' property needs to be set
-		if (serializer instanceof JavaSerializer)
+		if (config.serializer instanceof JavaSerializer)
 			return new JavaSerializeCache();
 		return new CustomSerializeCache();
 	}
 
 	private Key keyOf(String key)
 	{
-		NamespaceManager.set(namespace);
+		applyNamespace();
 		return KeyFactory.createKey(ancestor, kind, key);
+	}
+
+	private void applyNamespace()
+	{
+		if (config.usingNamespace)
+			NamespaceManager.set(config.namespace);
 	}
 
 	/***********************************************************************************
@@ -143,6 +169,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		// see: https://cloud.google.com/appengine/docs/java/datastore/queries#Java_Query_structure
 		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.IN, gaeKeys);
 		return entryIteratorOfQuery(newQuery().setFilter(filter));
+	}
+
+	@Override
+	public boolean containsKey(String key)
+	{
+		Filter filter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.EQUAL, keyOf(key));
+		return ds.prepare(newQuery().setFilter(filter).setKeysOnly()).asIterator().hasNext();
 	}
 
 	/***********************************************************************************
@@ -290,13 +323,13 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private V entityToValue(Entity entity)
 	{
 		Blob blob = (Blob) entity.getProperty(COL_NAME_ENTRY_VALUE);
-		return serializer.bytesToObj(blob.getBytes(), valueClass);
+		return config.serializer.bytesToObj(blob.getBytes(), config.valueClass);
 	}
 
 	private Entity entryToEntity(String key, V value)
 	{
 		Entity entity = new Entity(kind, key, ancestor);
-		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(serializer.objToBytes(value)));
+		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(config.serializer.objToBytes(value)));
 		for (GaeIndexImpl<?> index : indexes)
 		{
 			Object field = (value == null) ? null : index.getIndexedFieldOf(value);
@@ -312,7 +345,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 
 	private Query newQuery()
 	{
-		NamespaceManager.set(namespace);
+		applyNamespace();
 		return new Query(kind).setAncestor(ancestor);
 	}
 
@@ -537,7 +570,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		public V get(String key)
 		{
 			byte[] bytes = (byte[]) mc.get(key);
-			return serializer.bytesToObj(bytes, valueClass);
+			return config.serializer.bytesToObj(bytes, config.valueClass);
 		}
 
 		@Override
@@ -550,7 +583,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			{
 				Entry<String, Object> entry = iter.next();
 				byte[] bytes = (byte[]) entry.getValue();
-				entry.setValue(serializer.bytesToObj(bytes, valueClass));
+				entry.setValue(config.serializer.bytesToObj(bytes, config.valueClass));
 			}
 			return (Map<String, V>) (Map<String, ?>) values;
 		}
@@ -558,7 +591,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 		@Override
 		public void put(String key, V value)
 		{
-			mc.put(key, serializer.objToBytes(value));
+			mc.put(key, config.serializer.objToBytes(value));
 		}
 
 		@Override
@@ -572,7 +605,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 			{
 				Entry<String, Object> entry = iter.next();
 				Object value = entry.getValue();
-				entry.setValue(serializer.objToBytes((V) value));
+				entry.setValue(config.serializer.objToBytes((V) value));
 			}
 			mc.putAll(values);
 		}

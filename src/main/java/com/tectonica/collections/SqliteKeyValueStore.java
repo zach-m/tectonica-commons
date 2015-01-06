@@ -150,6 +150,21 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		return valueIteratorOfResultSet(ctx);
 	}
 
+	@Override
+	public boolean containsKey(final String key)
+	{
+		return jdbc.execute(new ConnListener<Boolean>()
+		{
+			@Override
+			protected Boolean onConnection(Connection conn) throws SQLException
+			{
+				PreparedStatement stmt = conn.prepareStatement(sqlSelectContainKey(key));
+				stmt.setString(1, key);
+				return stmt.executeQuery().next();
+			}
+		});
+	}
+
 	/***********************************************************************************
 	 * 
 	 * SETTERS (UTILS)
@@ -372,6 +387,11 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	private String sqlSelectKeys(Collection<String> keys)
 	{
 		return String.format("SELECT K,V FROM %s WHERE K IN (%s)", table, STR.implode("?", ",", keys.size()));
+	}
+
+	private String sqlSelectContainKey(String key)
+	{
+		return String.format("SELECT 1 FROM %s WHERE K=?", table);
 	}
 
 	private String sqlUpsert(boolean strictInsert)

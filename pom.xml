@@ -4,7 +4,7 @@
 
 	<groupId>com.tectonica</groupId>
 	<artifactId>tectonica-commons</artifactId>
-	<version>0.4.6-SNAPSHOT</version>
+	<version>0.4.6</version>
 
 	<name>Tectonica Commons</name>
 	<description>Set of Java utility classes, all completely independent, to provide lightweight solutions for common situations</description>
@@ -46,6 +46,7 @@
 		<version.appengine>1.9.17</version.appengine>
 		<version.jsf>2.2.8-02</version.jsf>
 		<version.kryo>3.0.0</version.kryo>
+		<version.fst>2.18</version.fst>
 		<version.sqlite>3.8.7</version.sqlite>
 		<version.guava>18.0</version.guava>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -129,7 +130,7 @@
 		<dependency>
 			<groupId>de.ruedigermoeller</groupId>
 			<artifactId>fst</artifactId>
-			<version>2.18</version>
+			<version>${version.fst}</version>
 			<scope>provided</scope>
 		</dependency>
 

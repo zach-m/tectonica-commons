@@ -378,7 +378,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		return iterateInto(valueIteratorFor(keys, true), new ArrayList<V>());
 	}
 
-	public boolean isExists(K key)
+	public boolean containsKey(K key)
 	{
 		// NOTE: the implementation here avoid serialization, but does caching. you'll probably want to override..
 		return iteratorFor(Collections.singletonList(key)).hasNext();
@@ -547,7 +547,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		lock.lock();
 		try
 		{
-			if (isExists(key))
+			if (containsKey(key))
 				return null;
 
 			V value = generator.generate(key);
@@ -751,10 +751,9 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 
 		// ///////////////////////////////////////////////////////////////////////////////////////
 
-		public boolean keyExistsOf(F f)
+		public boolean containsKeyOf(F f)
 		{
-			Iterator<K> iter = keyIteratorOf(f);
-			return (iter.hasNext());
+			return (keyIteratorOf(f).hasNext());
 		}
 
 		public Set<K> keySetOf(F f)
