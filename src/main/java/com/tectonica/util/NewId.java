@@ -22,17 +22,20 @@ public class NewId
 		// all dates between 2004 and and 2527 are taking up 11 hex digits, so the following is unnecessary
 //		timePart = leftPadded(timePart, 11, '0');
 
-		String randomPart = leftPadded(Long.toHexString(rand.nextLong()), 16, '0');
+		String randomPart = boxed(Long.toHexString(rand.nextLong()), 16, '0');
 
 		return timePart + randomPart;
 	}
 
-	private static String leftPadded(String str, int targetLength, char padChar)
+	private static String boxed(String str, int targetLength, char padChar)
 	{
 		int padsCount = targetLength - str.length();
 
-		if (padsCount <= 0)
-			return str; // returns original String if longer than target length
+		if (padsCount == 0)
+			return str; // no alterations required
+
+		if (padsCount < 0)
+			return str.substring(-padsCount, str.length());
 
 		final char[] pad = new char[padsCount];
 		for (int i = 0; i < pad.length; i++)
@@ -47,5 +50,13 @@ public class NewId
 	public static String generate(String prefix)
 	{
 		return prefix + generate();
+	}
+
+	/**
+	 * generates a limited-length key with slim chances of being globally unique. uses all digits and characters (i.e. not hexadecimal)
+	 */
+	public static String generateLimited(int length)
+	{
+		return boxed(Long.toString(rand.nextLong(), 36), length, '0');
 	}
 }
