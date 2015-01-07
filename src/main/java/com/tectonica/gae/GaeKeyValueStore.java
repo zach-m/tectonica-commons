@@ -329,7 +329,7 @@ public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<Stri
 	private Entity entryToEntity(String key, V value)
 	{
 		Entity entity = new Entity(kind, key, ancestor);
-		entity.setProperty(COL_NAME_ENTRY_VALUE, new Blob(config.serializer.objToBytes(value)));
+		entity.setUnindexedProperty(COL_NAME_ENTRY_VALUE, new Blob(config.serializer.objToBytes(value)));
 		for (GaeIndexImpl<?> index : indexes)
 		{
 			Object field = (value == null) ? null : index.getIndexedFieldOf(value);
