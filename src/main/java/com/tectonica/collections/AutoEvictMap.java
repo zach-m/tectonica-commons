@@ -117,8 +117,8 @@ public class AutoEvictMap<K, V>
 
 	private static class Holder<K, V>
 	{
-		private FutureTask<V> ft;
-		private int refCount;
+		private final FutureTask<V> ft;
+		private final int refCount;
 
 		public Holder(final K key, final Factory<K, V> generator)
 		{

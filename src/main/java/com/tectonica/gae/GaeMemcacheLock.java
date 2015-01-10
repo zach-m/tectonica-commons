@@ -1,9 +1,6 @@
 package com.tectonica.gae;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -12,6 +9,7 @@ import com.google.appengine.api.memcache.Expiration;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheService.SetPolicy;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
+import com.tectonica.collections.AutoEvictMap;
 
 /**
  * a {@link Lock} implementation for Google App Engine applications, which uses the Memcache service to ensure global locking (i.e. among
@@ -19,25 +17,43 @@ import com.google.appengine.api.memcache.MemcacheServiceFactory;
  * thread) and minimizes the amount of calls to the Memcache service by having all threads from a single instance share the Memcache
  * polling loop.
  * <p>
- * Locking with Memcache is not a bullet-proof solution, as unexpected eviction of the cache may result in a situation where one instance
- * acquires a lock that is in fact taken by another. However, the risk is very minimal especially if using the Dedicated Plan from Google
- * (see <a href='https://cloud.google.com/appengine/docs/adminconsole/memcache'>here</a>). Also, a lock entry in Memcache is very unlikely
- * to be evicted due to LRU considerations, as locks are either short-lived or very frequently updated (in high contention).
+ * Each lock object is associated with a globally-unique name, so that when separate threads (on possibly different instances) try to
+ * acquire a lock with the same name, only one at the time succeeds.
+ * <p>
+ * The usage is straightforward
+ * 
+ * <pre>
+ * Lock lock = GaeMemcacheLock.getLock("LOCK_NAME", true);
+ * lock.lock();
+ * try {
+ *    ...
+ * }
+ * finally {
+ *    lock.unlock();
+ * }
+ * </pre>
+ * 
+ * Each lock attained with {@link #getLock(String, boolean)} must be eventually released with {@link #disposeLock(String)}. It's possible
+ * however to attain a lock that's set for automatic disposal (upon its {@code unlock()}).
+ * <p>
+ * NOTE: Locking with Memcache is not a bullet-proof solution, as unexpected eviction of the cache may result in a situation where one
+ * instance acquires a lock that is in fact taken by another. However, the risk is very minimal especially if using the Dedicated Plan from
+ * Google (see <a href='https://cloud.google.com/appengine/docs/adminconsole/memcache'>here</a>). Also, a lock entry in Memcache is very
+ * unlikely to be evicted due to LRU considerations, as locks are either short-lived or very frequently updated (in high contention).
  * 
  * @author Zach Melamed
  */
 public class GaeMemcacheLock implements Lock
 {
-	private final static MemcacheService mc = MemcacheServiceFactory.getMemcacheService();
-
 	private static final int LOCK_AUTO_EXPIRATION_MS = 30000;
 	private static final long SLEEP_BETWEEN_RETRIES_MS = 50L;
 
+	private final MemcacheService mc;
 	private final String globalName;
 	private final boolean disposeWhenUnlocked;
 	private final long sleepBetweenRetriesMS;
 	private final ReentrantLock localLock;
-	private ThreadLocal<Integer> globalHoldCount = new ThreadLocal<Integer>()
+	private ThreadLocal<Integer> reentranceDepth = new ThreadLocal<Integer>()
 	{
 		@Override
 		protected Integer initialValue()
@@ -46,56 +62,21 @@ public class GaeMemcacheLock implements Lock
 		}
 	};
 
-	// //////////////////////////////////////////////////////////////////////////////////////////
-
-	private AtomicInteger refCount = new AtomicInteger(0);
-	private static Map<String, GaeMemcacheLock> locks = new ConcurrentHashMap<>(); // NOTE: under current implementation can be HashMap
-
-	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked)
+	private GaeMemcacheLock(String globalName, boolean disposeWhenUnlocked, String namespace, boolean locallyFair,
+			long sleepBetweenRetriesMS)
 	{
-		return getLock(globalName, disposeWhenUnlocked, false, SLEEP_BETWEEN_RETRIES_MS);
-	}
-
-	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked, boolean locallyFair, long sleepBetweenRetriesMS)
-	{
-		synchronized (locks) // TODO: implement without locking the entire map
-		{
-			GaeMemcacheLock lock = locks.get(globalName);
-			if (lock == null)
-				locks.put(globalName, lock = new GaeMemcacheLock(globalName, disposeWhenUnlocked, locallyFair, sleepBetweenRetriesMS));
-			lock.refCount.incrementAndGet();
-			return lock;
-		}
-	}
-
-	public static void disposeLock(String globalName)
-	{
-		synchronized (locks)
-		{
-			GaeMemcacheLock lock = locks.get(globalName);
-			if (lock != null)
-			{
-				if (lock.refCount.decrementAndGet() == 0)
-					locks.remove(globalName);
-			}
-		}
-	}
-
-	// //////////////////////////////////////////////////////////////////////////////////////////
-
-	private GaeMemcacheLock(String globalName, boolean disposeWhenUnlocked, boolean locallyFair, long sleepBetweenRetriesMS)
-	{
+		this.mc = MemcacheServiceFactory.getMemcacheService(namespace);
 		this.globalName = globalName;
 		this.disposeWhenUnlocked = disposeWhenUnlocked;
 		this.sleepBetweenRetriesMS = sleepBetweenRetriesMS;
-		localLock = new ReentrantLock(locallyFair);
+		this.localLock = new ReentrantLock(locallyFair);
 	}
 
 	@Override
 	public void lockInterruptibly() throws InterruptedException
 	{
 		localLock.lock();
-		waitForGlobalLock(null);
+		lockGlobally(null);
 	}
 
 	@Override
@@ -125,9 +106,9 @@ public class GaeMemcacheLock implements Lock
 	{
 		if (!localLock.tryLock())
 			return false;
-		if (!lockGlobally())
+		if (!tryLockGlobally())
 		{
-			localLock.unlock();
+			localLock.unlock(); // since we weren't able to lock globally, no point in holding the local lock we just acquired
 			return false;
 		}
 		return true;
@@ -138,7 +119,7 @@ public class GaeMemcacheLock implements Lock
 	{
 		long timeout = System.currentTimeMillis() + unit.toMillis(time);
 		if (localLock.tryLock(time, unit))
-			return waitForGlobalLock(timeout);
+			return lockGlobally(timeout);
 		return false;
 	}
 
@@ -149,19 +130,22 @@ public class GaeMemcacheLock implements Lock
 	}
 
 	/**
-	 * this method blocks execution until it acquires the global lock (or gets interrupted). it does so using an infinite loop which checks
-	 * a shared Memcache entry once in every short-while, until it succeeds in acquiring the lock
+	 * Blocks until the global lock is acquired, a timeout is reached, or an interruption occurs. It does so using an infinite loop which
+	 * checks a shared Memcache entry once in every short-while
 	 */
-	private boolean waitForGlobalLock(Long timeout) throws InterruptedException
+	private boolean lockGlobally(Long timeout) throws InterruptedException
 	{
 		while (true)
 		{
+			if (Thread.interrupted())
+				throw new InterruptedException();
+
 			long before = System.currentTimeMillis();
 
-			if (lockGlobally())
-				return true; // don't wait if we got the lock
+			if (tryLockGlobally())
+				return true;
 
-			// check for timeout
+			// check if we timed out
 			long after = System.currentTimeMillis();
 			if (timeout != null && after >= timeout.longValue())
 				return false;
@@ -184,34 +168,36 @@ public class GaeMemcacheLock implements Lock
 	}
 
 	/**
-	 * guaranteed to run only after acquiring the local lock, this method attempts to acquire the global lock too. it uses a reference
-	 * counting methodology to support reentrancy.
+	 * Performs a single attempt to acquire the global lock. Supports reentrancy.
+	 * 
+	 * @return
+	 *         true if the global lock was acquired, false otherwise (i.e. lock is acquired by another instance)
 	 */
-	private boolean lockGlobally()
+	private boolean tryLockGlobally()
 	{
-		int holdCount = globalHoldCount.get().intValue();
+		int depth = reentranceDepth.get().intValue();
 
 		boolean acquired;
-		if (holdCount > 0)
+		if (depth > 0)
 			acquired = true;
 		else
 			acquired = mc.put(globalName, "X", Expiration.byDeltaMillis(LOCK_AUTO_EXPIRATION_MS), SetPolicy.ADD_ONLY_IF_NOT_PRESENT);
 
 		if (acquired)
-			globalHoldCount.set(holdCount + 1);
+			reentranceDepth.set(depth + 1);
 
 		return acquired;
 	}
 
 	/**
-	 * guaranteed to run before releasing the local lock, this releases the global lock first.it uses a reference counting methodology to
-	 * support reentrancy
+	 * Guaranteed to run before releasing the local lock, this method releases the global lock first. It uses a reference counting
+	 * methodology to support reentrancy
 	 */
 	private void unlockGlobally()
 	{
-		int holdCount = globalHoldCount.get().intValue() - 1;
-		globalHoldCount.set(holdCount);
-		if (holdCount == 0)
+		int depth = reentranceDepth.get().intValue() - 1;
+		reentranceDepth.set(depth);
+		if (depth == 0)
 			mc.delete(globalName);
 	}
 
@@ -232,5 +218,61 @@ public class GaeMemcacheLock implements Lock
 			return false;
 		GaeMemcacheLock other = (GaeMemcacheLock) obj;
 		return globalName.equals(other.globalName);
+	}
+
+	// //////////////////////////////////////////////////////////////////////////////////////////
+
+	private static AutoEvictMap<String, GaeMemcacheLock> locks = new AutoEvictMap<>();
+
+	/**
+	 * see {@link #getLock(String, boolean, String, boolean, long)}
+	 */
+	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked)
+	{
+		return getLock(globalName, disposeWhenUnlocked, null, false, SLEEP_BETWEEN_RETRIES_MS);
+	}
+
+	/**
+	 * Returns a {@link Lock} object, for global locking within all App-Engine instances (or more accurately, all that share a given
+	 * namespace). When the lock is no longer needed, invoke {@link #disposeLock(String)}. Alternatively, you may pass
+	 * {@code disposeWhenUnlocked = true} here to have the dispose invoked automatically upon {@link Lock#unlock()}.
+	 * <p>
+	 * NOTE: The returned lock does not support {@link #newCondition()}.
+	 * 
+	 * @param globalName
+	 *            unique name among all the App Engine instances
+	 * @param disposeWhenUnlocked
+	 *            if true, disposes the returned lock automatically upon {@link Lock#unlock()}
+	 * @param namespace
+	 *            if not null, uses a namespaced Memcache service
+	 * @param locallyFair
+	 *            indicates whether it's important to treat the local threads waiting on the lock fairly
+	 * @param sleepBetweenRetriesMS
+	 *            delay between attempts to acquire the Memcache lock
+	 * @return
+	 */
+	public static GaeMemcacheLock getLock(final String globalName, final boolean disposeWhenUnlocked, final String namespace,
+			final boolean locallyFair, final long sleepBetweenRetriesMS)
+	{
+		try
+		{
+			return locks.acquire(globalName, new AutoEvictMap.Factory<String, GaeMemcacheLock>()
+			{
+				@Override
+				public GaeMemcacheLock valueOf(String key)
+				{
+					return new GaeMemcacheLock(globalName, disposeWhenUnlocked, namespace, locallyFair, sleepBetweenRetriesMS);
+				}
+			});
+		}
+		catch (InterruptedException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public static void disposeLock(String globalName)
+	{
+		locks.release(globalName);
 	}
 }

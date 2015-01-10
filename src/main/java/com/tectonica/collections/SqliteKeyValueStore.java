@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -30,7 +29,6 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 	private final Serializer<V> serializer;
 	private final List<SqliteIndexImpl<?>> indexes;
 	private final List<String> indexeCols;
-	private final Map<String, SelfRemoveLock> locks;
 	private final JDBC jdbc;
 
 	/**
@@ -48,7 +46,6 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		this.serializer = new JavaSerializer<V>();
 		this.indexes = new ArrayList<>();
 		this.indexeCols = new ArrayList<>();
-		this.locks = new HashMap<>();
 		this.jdbc = SqliteUtil.connect(connStr);
 		createTable();
 	}
@@ -195,42 +192,35 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		};
 	}
 
+	private AutoEvictMap<String, Lock> locks = new AutoEvictMap<String, Lock>(new AutoEvictMap.Factory<String, Lock>()
+	{
+		@Override
+		public Lock valueOf(final String key)
+		{
+			return new ReentrantLock()
+			{
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				public void unlock()
+				{
+					super.unlock();
+					locks.release(key);
+				}
+			};
+		}
+	});
+
 	@Override
 	protected Lock getModificationLock(String key)
 	{
-		synchronized (locks) // TODO: implement without locking the entire map
+		try
 		{
-			SelfRemoveLock lock;
-			if (!locks.containsKey(key))
-				locks.put(key, lock = new SelfRemoveLock(key));
-			else
-				lock = locks.get(key);
-			lock.refCount.incrementAndGet();
-			return lock;
+			return locks.acquire(key);
 		}
-	}
-
-	private class SelfRemoveLock extends ReentrantLock
-	{
-		private static final long serialVersionUID = 1L;
-
-		private final AtomicInteger refCount = new AtomicInteger(0);
-		private final String key;
-
-		public SelfRemoveLock(String key)
+		catch (InterruptedException e)
 		{
-			this.key = key;
-		}
-
-		@Override
-		public void unlock()
-		{
-			super.unlock();
-			synchronized (locks)
-			{
-				if (refCount.decrementAndGet() == 0)
-					locks.remove(key);
-			}
+			throw new RuntimeException(e);
 		}
 	}
 
