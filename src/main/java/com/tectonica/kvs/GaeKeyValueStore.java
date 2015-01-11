@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.gae;
+package com.tectonica.kvs;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -43,11 +43,11 @@ import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
-import com.tectonica.collections.KeyValueStore;
+import com.tectonica.gae.GaeMemcacheLock;
 import com.tectonica.thirdparty.KryoUtil;
 import com.tectonica.util.SerializeUtil;
 
-public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
+public class GaeKeyValueStore<V extends Serializable> extends AbstractKeyValueStore<String, V>
 {
 	private final DatastoreService ds;
 

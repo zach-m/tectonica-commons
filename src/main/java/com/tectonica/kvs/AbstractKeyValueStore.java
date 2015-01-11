@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.collections;
+package com.tectonica.kvs;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,7 +30,8 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
 
-import com.tectonica.collections.KeyValueStore.KeyValue;
+import com.tectonica.collections.ConcurrentMultimap;
+import com.tectonica.kvs.AbstractKeyValueStore.KeyValue;
 
 /**
  * Simple, yet powerful, framework (and approach) for handling a key-value store. It allows for multiple concurrent readers but a single
@@ -44,7 +45,7 @@ import com.tectonica.collections.KeyValueStore.KeyValue;
  * 
  * @author Zach Melamed
  */
-public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
+public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 {
 	public interface KeyValue<K, V>
 	{
@@ -68,7 +69,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	 *            this optional parameter is suitable in situations where the key of an entry can be inferred from its value directly
 	 *            (as opposed to when the key and value are stored separately). when provided, several convenience methods become applicable
 	 */
-	protected KeyValueStore(KeyMapper<K, V> keyMapper)
+	protected AbstractKeyValueStore(KeyMapper<K, V> keyMapper)
 	{
 		this.keyMapper = keyMapper;
 		initializeCache();
@@ -412,13 +413,13 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 	/**
 	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
 	 * <ul>
-	 * <li>using {@link KeyValueStore#put(Object, Object)}: in such case only the {@link #dbPut(Object)} method will be invoked. it will be
+	 * <li>using {@link AbstractKeyValueStore#put(Object, Object)}: in such case only the {@link #dbPut(Object)} method will be invoked. it will be
 	 * passed an updated value for an existing key.
-	 * <li>using {@link KeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
+	 * <li>using {@link AbstractKeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
 	 * generating an instance for the caller to safely modify, and then the {@link #dbPut(Object)} method will be invoked on that modified
 	 * instance.
 	 * </ul>
-	 * both methods are invoked under the concurrency protection a lock provided with {@link KeyValueStore#getModificationLock(Object)}.
+	 * both methods are invoked under the concurrency protection a lock provided with {@link AbstractKeyValueStore#getModificationLock(Object)}.
 	 */
 	protected interface Modifier<K, V>
 	{
@@ -432,7 +433,7 @@ public abstract class KeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
 		V getModifiableValue();
 
 		/**
-		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link KeyValueStore#get(Object, boolean)} will
+		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link AbstractKeyValueStore#get(Object, boolean)} will
 		 * return the updated value.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry

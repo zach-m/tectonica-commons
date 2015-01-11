@@ -1,12 +1,12 @@
 package com.tectonica.test;
 
-import com.tectonica.collections.InMemKeyValueStore;
-import com.tectonica.collections.KeyValueStore;
+import com.tectonica.kvs.InMemKeyValueStore;
+import com.tectonica.kvs.AbstractKeyValueStore;
 
 public class TestInMemKeyValueStore extends TestKeyValueStore
 {
 	@Override
-	protected KeyValueStore<String, Topic> createStore()
+	protected AbstractKeyValueStore<String, Topic> createStore()
 	{
 		return new InMemKeyValueStore<>(keyMapper);
 	}

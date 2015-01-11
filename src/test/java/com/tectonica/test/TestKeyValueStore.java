@@ -12,17 +12,17 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.tectonica.collections.KeyValueStore;
-import com.tectonica.collections.KeyValueStore.Updater;
+import com.tectonica.kvs.AbstractKeyValueStore;
+import com.tectonica.kvs.AbstractKeyValueStore.Updater;
 
 public abstract class TestKeyValueStore
 {
-	protected KeyValueStore<String, Topic> store;
-	protected KeyValueStore.Index<String, Topic, String> bundleToTopicId;
+	protected AbstractKeyValueStore<String, Topic> store;
+	protected AbstractKeyValueStore.Index<String, Topic, String> bundleToTopicId;
 
-	protected abstract KeyValueStore<String, Topic> createStore();
+	protected abstract AbstractKeyValueStore<String, Topic> createStore();
 
-	protected KeyValueStore.KeyMapper<String, Topic> keyMapper = new KeyValueStore.KeyMapper<String, Topic>()
+	protected AbstractKeyValueStore.KeyMapper<String, Topic> keyMapper = new AbstractKeyValueStore.KeyMapper<String, Topic>()
 	{
 		@Override
 		public String getKeyOf(Topic topic)
@@ -38,7 +38,7 @@ public abstract class TestKeyValueStore
 	{
 		store = createStore();
 
-		bundleToTopicId = store.createIndex("b2t", new KeyValueStore.IndexMapper<Topic, String>()
+		bundleToTopicId = store.createIndex("b2t", new AbstractKeyValueStore.IndexMapper<Topic, String>()
 		{
 			@Override
 			public String getIndexedFieldOf(Topic topic)

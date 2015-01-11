@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.collections;
+package com.tectonica.kvs;
 
 import java.io.Serializable;
 import java.sql.Connection;
@@ -32,15 +32,16 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.tectonica.collections.AutoEvictMap;
 import com.tectonica.core.STR;
 import com.tectonica.jdbc.JDBC;
-import com.tectonica.jdbc.SqliteUtil;
 import com.tectonica.jdbc.JDBC.ConnListener;
 import com.tectonica.jdbc.JDBC.ExecutionContext;
 import com.tectonica.jdbc.ResultSetIterator;
+import com.tectonica.jdbc.SqliteUtil;
 import com.tectonica.util.SerializeUtil;
 
-public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
+public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValueStore<String, V>
 {
 	private final Class<V> valueClass;
 	private final String table;

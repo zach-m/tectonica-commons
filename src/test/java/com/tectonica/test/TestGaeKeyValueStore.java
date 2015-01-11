@@ -19,9 +19,9 @@ import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
-import com.tectonica.collections.KeyValueStore;
-import com.tectonica.gae.GaeKeyValueStore;
-import com.tectonica.gae.GaeKeyValueStore.Config;
+import com.tectonica.kvs.GaeKeyValueStore;
+import com.tectonica.kvs.AbstractKeyValueStore;
+import com.tectonica.kvs.GaeKeyValueStore.Config;
 
 public class TestGaeKeyValueStore extends TestKeyValueStore
 {
@@ -46,7 +46,7 @@ public class TestGaeKeyValueStore extends TestKeyValueStore
 	}
 
 	@Override
-	protected KeyValueStore<String, Topic> createStore()
+	protected AbstractKeyValueStore<String, Topic> createStore()
 	{
 		return new GaeKeyValueStore<>(Config.create(Topic.class).withNamespace("ns"), keyMapper);
 	}

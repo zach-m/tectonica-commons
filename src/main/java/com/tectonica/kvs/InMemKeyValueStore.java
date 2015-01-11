@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.collections;
+package com.tectonica.kvs;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -29,9 +29,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.tectonica.collections.ConcurrentMultimap;
 import com.tectonica.util.SerializeUtil;
 
-public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore<K, V>
+public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyValueStore<K, V>
 {
 	private final ConcurrentHashMap<K, InMemEntry> entries;
 	private final ConcurrentHashMap<K, Lock> locks;
@@ -139,7 +140,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	{
 		return entries.keySet();
 	}
-	
+
 	@Override
 	public boolean containsKey(K key)
 	{
@@ -161,6 +162,8 @@ public class InMemKeyValueStore<K, V extends Serializable> extends KeyValueStore
 	@Override
 	public Lock getModificationLock(K key)
 	{
+		// TODO: in this simplistic implementation we always increase the size of the 'locks' map
+		// if important, use the AutoEvictMap here
 		Lock lock;
 		Lock existing = locks.putIfAbsent(key, lock = new ReentrantLock());
 		if (existing != null)
