@@ -32,13 +32,13 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.tectonica.util.JDBC;
-import com.tectonica.util.JDBC.ConnListener;
-import com.tectonica.util.JDBC.ExecutionContext;
-import com.tectonica.util.JDBC.ResultSetIterator;
+import com.tectonica.jdbc.JDBC;
+import com.tectonica.jdbc.SqliteUtil;
+import com.tectonica.jdbc.JDBC.ConnListener;
+import com.tectonica.jdbc.JDBC.ExecutionContext;
+import com.tectonica.jdbc.ResultSetIterator;
 import com.tectonica.util.STR;
 import com.tectonica.util.SerializeUtil;
-import com.tectonica.util.SqliteUtil;
 
 public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
 {
@@ -171,7 +171,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		return jdbc.execute(new ConnListener<Boolean>()
 		{
 			@Override
-			protected Boolean onConnection(Connection conn) throws SQLException
+			public Boolean onConnection(Connection conn) throws SQLException
 			{
 				PreparedStatement stmt = conn.prepareStatement(sqlSelectContainKey(key));
 				stmt.setString(1, key);
@@ -268,7 +268,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		int deleted = jdbc.execute(new ConnListener<Integer>()
 		{
 			@Override
-			protected Integer onConnection(Connection conn) throws SQLException
+			public Integer onConnection(Connection conn) throws SQLException
 			{
 				PreparedStatement stmt = conn.prepareStatement(sqlDeleteSingle());
 				stmt.setString(1, key);
@@ -284,7 +284,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		return jdbc.execute(new ConnListener<Integer>()
 		{
 			@Override
-			protected Integer onConnection(Connection conn) throws SQLException
+			public Integer onConnection(Connection conn) throws SQLException
 			{
 				return conn.createStatement().executeUpdate(sqlDeleteAll());
 			}
@@ -303,7 +303,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		jdbc.execute(new ConnListener<Void>()
 		{
 			@Override
-			protected Void onConnection(Connection conn) throws SQLException
+			public Void onConnection(Connection conn) throws SQLException
 			{
 				try
 				{
@@ -618,7 +618,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<S
 		return jdbc.execute(new ConnListener<Integer>()
 		{
 			@Override
-			protected Integer onConnection(Connection conn) throws SQLException
+			public Integer onConnection(Connection conn) throws SQLException
 			{
 				PreparedStatement stmt = conn.prepareStatement(sqlUpsert(strictInsert));
 				stmt.setString(1, key);

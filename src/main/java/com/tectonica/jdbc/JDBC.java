@@ -16,37 +16,19 @@
  * limitations under the License.
  */
 
-package com.tectonica.util;
+package com.tectonica.jdbc;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
 
 import javax.sql.DataSource;
 
 public class JDBC
 {
-	public static abstract class ConnListener<T>
+	public static interface ConnListener<T>
 	{
-		protected abstract T onConnection(final Connection conn) throws SQLException;
-
-		@SuppressWarnings("unchecked")
-		protected T readSingle(ResultSet rs) throws SQLException
-		{
-			if (rs.next())
-				return (T) rs.getObject(1);
-			return null;
-		}
-
-		@SuppressWarnings("unchecked")
-		protected <V> V readSingle(ResultSet rs, Class<V> clz) throws SQLException
-		{
-			if (rs.next())
-				return (V) rs.getObject(1);
-			return null;
-		}
+		T onConnection(final Connection conn) throws SQLException;
 	}
 
 	protected final DataSource connPool;
@@ -114,7 +96,7 @@ public class JDBC
 		public final Connection conn;
 		public final ResultSet rs;
 
-		private ExecutionContext(Connection conn, ResultSet rs)
+		ExecutionContext(Connection conn, ResultSet rs)
 		{
 			this.conn = conn;
 			this.rs = rs;
@@ -133,72 +115,6 @@ public class JDBC
 		catch (SQLException e)
 		{
 			throw new RuntimeException(e);
-		}
-	}
-
-	public static class ResultSetIterator implements Iterator<ResultSet>
-	{
-		private final ExecutionContext ctx;
-		private boolean nextFound = false;
-
-		public ResultSetIterator(ResultSet rs)
-		{
-			this.ctx = new ExecutionContext(null, rs);
-		}
-
-		public ResultSetIterator(ExecutionContext ctx)
-		{
-			this.ctx = ctx;
-		}
-
-		@Override
-		public boolean hasNext()
-		{
-			if (!nextFound)
-			{
-				try
-				{
-					nextFound = ctx.rs.next();
-				}
-				catch (SQLException e)
-				{
-					throw new RuntimeException(e);
-				}
-				if (!nextFound && (ctx.conn != null))
-				{
-					try
-					{
-						ctx.conn.close();
-					}
-					catch (SQLException e)
-					{
-						e.printStackTrace(); // not a critical error
-					}
-				}
-			}
-			return nextFound;
-		}
-
-		@Override
-		public ResultSet next()
-		{
-			if (!hasNext())
-				throw new NoSuchElementException();
-			nextFound = false;
-			return ctx.rs;
-		}
-
-		@Override
-		public void remove()
-		{
-			try
-			{
-				ctx.rs.deleteRow();
-			}
-			catch (SQLException e)
-			{
-				throw new RuntimeException(e);
-			}
 		}
 	}
 }
