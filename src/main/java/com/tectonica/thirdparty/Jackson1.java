@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.util;
+package com.tectonica.thirdparty;
 
 import java.io.IOException;
 import java.io.InputStream;

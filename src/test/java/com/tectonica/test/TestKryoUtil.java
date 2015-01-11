@@ -14,7 +14,7 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.tectonica.util.KryoUtil;
+import com.tectonica.thirdparty.KryoUtil;
 import com.tectonica.util.SerializeUtil;
 
 public class TestKryoUtil

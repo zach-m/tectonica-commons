@@ -41,7 +41,7 @@ import com.google.appengine.api.blobstore.FileInfo;
 import com.google.appengine.api.images.ImagesService;
 import com.google.appengine.api.images.ImagesServiceFactory;
 import com.google.appengine.api.images.ServingUrlOptions;
-import com.tectonica.util.Jackson1;
+import com.tectonica.thirdparty.Jackson1;
 
 /**
  * A generic servlet, implementing GAE's blobstore protocol to upload and download static content. To use it, you need an entry in your

@@ -10,7 +10,7 @@ import org.codehaus.jackson.annotate.JsonTypeInfo.As;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.tectonica.util.Jackson1;
+import com.tectonica.thirdparty.Jackson1;
 
 public class TestJackson1
 {

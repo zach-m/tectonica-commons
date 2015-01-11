@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.util;
+package com.tectonica.thirdparty;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -36,13 +36,16 @@ import org.slf4j.LoggerFactory;
  * HTTP-requests queue, that may not play well with containers such as JavaEE and GAE. The REST API itself is invoked synchronously by
  * {@link #sendText(String, String)} and {@link #sendJson(String, String)}, so avoid using them in the main thread due to network latency.
  * <p>
- * While not a requirement, this class is intended to be used as a Singleton, and it is thread-safe by design.
+ * While not a requirement, this class is intended to be used as a Singleton, and it is thread-safe by design (note, however, that it allows
+ * you to hook a listener, which may break the thread-safeness).
  * 
  * @see http://www.pubnub.com/http-rest-push-api/
  */
-public class PubnubRestPublisher
+public class PubnubUtil
 {
-	private static final Logger LOG = LoggerFactory.getLogger(PubnubRestPublisher.class);
+	private static final String PUBNUB_PUBLISH_URL_PREFIX = "http://pubsub.pubnub.com/publish/";
+
+	private static final Logger LOG = LoggerFactory.getLogger(PubnubUtil.class);
 
 	public static interface Listener
 	{
@@ -80,9 +83,9 @@ public class PubnubRestPublisher
 
 	private final String urlFmt;
 
-	public PubnubRestPublisher(String publishKey, String subscribeKey)
+	public PubnubUtil(String publishKey, String subscribeKey)
 	{
-		urlFmt = "http://pubsub.pubnub.com/publish/" + publishKey + "/" + subscribeKey + "/0/%s/0/%s";
+		urlFmt = PUBNUB_PUBLISH_URL_PREFIX + publishKey + "/" + subscribeKey + "/0/%s/0/%s";
 	}
 
 	public void sendText(String channel, String txtMsg)

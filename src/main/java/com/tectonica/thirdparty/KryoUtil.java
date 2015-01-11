@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.util;
+package com.tectonica.thirdparty;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;

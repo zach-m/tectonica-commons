@@ -44,7 +44,7 @@ import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.tectonica.collections.KeyValueStore;
-import com.tectonica.util.KryoUtil;
+import com.tectonica.thirdparty.KryoUtil;
 import com.tectonica.util.SerializeUtil;
 
 public class GaeKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
