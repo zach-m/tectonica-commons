@@ -20,6 +20,11 @@ package com.tectonica.util;
 
 import java.util.Random;
 
+/**
+ * Utility class for generating random IDs.
+ * 
+ * @author Zach Melamed
+ */
 public class NewId
 {
 	private static Random rand = new Random();
@@ -37,8 +42,7 @@ public class NewId
 	{
 		String timePart = Long.toHexString(System.currentTimeMillis());
 
-		// all dates between 2004 and and 2527 are taking up 11 hex digits, so the following is unnecessary
-//		timePart = leftPadded(timePart, 11, '0');
+		// all dates between 2004 and and 2527 are taking up 11 hex digits, so no need in extra left-padding
 
 		String randomPart = boxed(Long.toHexString(rand.nextLong()), 16, '0');
 
@@ -49,16 +53,16 @@ public class NewId
 	{
 		int padsCount = targetLength - str.length();
 
-		if (padsCount == 0)
-			return str; // no alterations required
+		if (padsCount == 0) // i.e. no alterations required
+			return str;
 
-		if (padsCount < 0)
+		if (padsCount < 0) // i.e. need to shorted the string
 			return str.substring(-padsCount, str.length());
 
+		// need to left-pad the string
 		final char[] pad = new char[padsCount];
 		for (int i = 0; i < pad.length; i++)
 			pad[i] = padChar;
-
 		return (new String(pad)).concat(str);
 	}
 
@@ -71,7 +75,7 @@ public class NewId
 	}
 
 	/**
-	 * generates a limited-length key with slim chances of being globally unique. uses all digits and characters (i.e. not hexadecimal)
+	 * generates a limited-length key (with limited chances of being globally unique). uses all digits and characters (i.e. not hexadecimal)
 	 */
 	public static String generateLimited(int length)
 	{

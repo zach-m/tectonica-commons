@@ -18,6 +18,7 @@
 
 package com.tectonica.jdbc;
 
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Iterator;
@@ -25,6 +26,14 @@ import java.util.NoSuchElementException;
 
 import com.tectonica.jdbc.JDBC.ExecutionContext;
 
+/**
+ * An {@link Iterator} for going over a result set row-by-row. It does not use the {@link ResultSet#isLast()} method, which isn't
+ * implemented by all JDBC providers. Instead, it performs a read-ahead mechanism which is practically costless when scanning the entire
+ * result set. When constructed from a {@link ExecutionContext} or from a combination of a {@link ResultSet} and {@link Connection}, it will
+ * also close the associated connection after the last row has been retrieved.
+ * 
+ * @author Zach Melamed
+ */
 public class ResultSetIterator implements Iterator<ResultSet>
 {
 	private final ExecutionContext ctx;
@@ -33,6 +42,11 @@ public class ResultSetIterator implements Iterator<ResultSet>
 	public ResultSetIterator(ResultSet rs)
 	{
 		this.ctx = new ExecutionContext(null, rs);
+	}
+
+	public ResultSetIterator(ResultSet rs, Connection conn)
+	{
+		this.ctx = new ExecutionContext(conn, rs);
 	}
 
 	public ResultSetIterator(ExecutionContext ctx)
@@ -53,7 +67,7 @@ public class ResultSetIterator implements Iterator<ResultSet>
 			{
 				throw new RuntimeException(e);
 			}
-			
+
 			// auto close connection if applicable
 			if (!nextFound && (ctx.conn != null))
 			{

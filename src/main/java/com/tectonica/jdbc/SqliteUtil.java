@@ -22,6 +22,18 @@ import javax.sql.DataSource;
 
 import org.sqlite.SQLiteDataSource;
 
+/**
+ * Generator for SQLite Connection Pool. Requires:
+ * 
+ * <pre>
+ * &lt;dependency&gt;
+ *     &lt;groupId&gt;org.xerial&lt;/groupId&gt;
+ *     &lt;artifactId&gt;sqlite-jdbc&lt;/artifactId&gt;
+ * &lt;/dependency&gt;
+ * </pre>
+ * 
+ * @author Zach Melamed
+ */
 public class SqliteUtil
 {
 	public static JDBC connect(String connStr)

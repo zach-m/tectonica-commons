@@ -24,6 +24,11 @@ import java.sql.SQLException;
 
 import javax.sql.DataSource;
 
+/**
+ * Simple wrapper for basic boilerplate JDBC tasks
+ * 
+ * @author Zach Melamed
+ */
 public class JDBC
 {
 	public static interface ConnListener<T>
@@ -111,6 +116,44 @@ public class JDBC
 			conn = connPool.getConnection();
 			ResultSet rs = connListener.onConnection(conn);
 			return new ExecutionContext(conn, rs);
+		}
+		catch (SQLException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public ExecutionContext startTransact(ConnListener<ResultSet> connListener)
+	{
+		Connection conn = null;
+		try
+		{
+			conn = connPool.getConnection();
+			conn.setAutoCommit(false);
+			ResultSet rs = connListener.onConnection(conn);
+			return new ExecutionContext(conn, rs);
+		}
+		catch (SQLException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public void endTransact(ExecutionContext ctx, boolean commit)
+	{
+		try
+		{
+			try
+			{
+				if (commit)
+					ctx.conn.commit();
+				else
+					ctx.conn.rollback();
+			}
+			finally
+			{
+				ctx.conn.close();
+			}
 		}
 		catch (SQLException e)
 		{

@@ -32,6 +32,18 @@ import org.codehaus.jackson.map.SerializationConfig;
 import org.codehaus.jackson.map.annotate.JsonSerialize.Inclusion;
 import org.codehaus.jackson.node.ArrayNode;
 
+/**
+ * Convenience wrapper for Jackson APIs version 1.x. Requires:
+ * 
+ * <pre>
+ * &lt;dependency&gt;
+ *     &lt;groupId&gt;org.codehaus.jackson&lt;/groupId&gt;
+ *     &lt;artifactId&gt;jackson-mapper-asl&lt;/artifactId&gt;
+ * &lt;/dependency&gt;
+ * </pre>
+ * 
+ * @author Zach Melamed
+ */
 public class Jackson1
 {
 	private static final ObjectMapper treeMapper = new ObjectMapper();

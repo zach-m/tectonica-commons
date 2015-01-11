@@ -22,6 +22,18 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
+/**
+ * Convenience wrapper Kryo's fundamental services. Requires:
+ * 
+ * <pre>
+ * &lt;dependency&gt;
+ *     &lt;groupId&gt;com.esotericsoftware&lt;/groupId&gt;
+ *     &lt;artifactId&gt;kryo&lt;/artifactId&gt;
+ * &lt;/dependency&gt;
+ * </pre>
+ * 
+ * @author Zach Melamed
+ */
 public class KryoUtil
 {
 	private static class KryoBox

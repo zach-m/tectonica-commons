@@ -41,9 +41,17 @@ import java.util.Map.Entry;
 import javax.xml.bind.DatatypeConverter;
 
 /**
- * General HTTP utility class for invoking HTTP requests using only Java's standard network packages (in particular, avoiding Apache Commons
- * HttpClient). The class offers a single static method {@link #execute(String, String, String, Headers, Attachment, CookieStore)}, or, for
- * better convenience, a builder pattern, accessible via {@link HTTP#url(String)}
+ * General-purpose HTTP utility class for invoking HTTP requests using only Java's standard network packages (in particular, avoiding Apache
+ * Commons HttpClient). The class can be be used either by using its all-arguments static method
+ * {@link #execute(String, String, String, Headers, Attachment, CookieStore)}, or, more conveniently, by its builder service, accessible via
+ * {@link HTTP#url(String)}.
+ * <p>
+ * The class supports several common requirements:
+ * <ul>
+ * <li>Provide custom headers
+ * <li>Receive cookies and send them in consequent requests (using a {@link CookieStore})
+ * <li>Add "attachment" (i.e. send a multipart content)
+ * </ul>
  * 
  * @author Zach Melamed
  */
@@ -133,6 +141,8 @@ public class HTTP
 	public static class CookieStore
 	{
 		private Map<String, String> cookies = new HashMap<String, String>();
+
+		// TODO: add manual setter and getter for custom cookies ?
 
 		private void fromHeader(List<String> setCookies)
 		{

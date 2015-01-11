@@ -33,6 +33,18 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 
+/**
+ * Convenience wrapper for Jackson APIs version 2.x. Requires:
+ * 
+ * <pre>
+ * &lt;dependency&gt;
+ *     &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt;
+ *     &lt;artifactId&gt;jackson-databind&lt;/artifactId&gt;
+ * &lt;/dependency&gt;
+ * </pre>
+ * 
+ * @author Zach Melamed
+ */
 public class Jackson2
 {
 	private static final ObjectMapper treeMapper = new ObjectMapper();

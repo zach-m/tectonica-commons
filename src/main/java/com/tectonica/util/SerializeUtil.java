@@ -26,6 +26,11 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 
+/**
+ * Convenience wrapper for the JDK serialization services
+ * 
+ * @author Zach Melamed
+ */
 public class SerializeUtil
 {
 	public static byte[] objToBytes(Object obj)
@@ -80,7 +85,7 @@ public class SerializeUtil
 	}
 
 	/**
-	 * an inefficient way of cloning a Serializable object. use only temporarily. better solutions include frameworks such as Kryo.
+	 * an inefficient way of cloning a Serializable object. use only temporarily. better solutions include frameworks like Kryo.
 	 */
 	@SuppressWarnings("unchecked")
 	public static <V> V copyOf(V obj)

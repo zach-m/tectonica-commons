@@ -27,7 +27,6 @@ import java.util.Arrays;
  * this particular axis.
  * 
  * @author Zach Melamed
- *
  */
 public class BitCube
 {
