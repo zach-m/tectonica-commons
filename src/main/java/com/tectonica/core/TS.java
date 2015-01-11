@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.util;
+package com.tectonica.core;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;

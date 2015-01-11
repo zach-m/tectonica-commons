@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.util;
+package com.tectonica.core;
 
 import java.io.BufferedReader;
 import java.io.File;

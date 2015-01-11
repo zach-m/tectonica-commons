@@ -32,12 +32,12 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.tectonica.core.STR;
 import com.tectonica.jdbc.JDBC;
 import com.tectonica.jdbc.SqliteUtil;
 import com.tectonica.jdbc.JDBC.ConnListener;
 import com.tectonica.jdbc.JDBC.ExecutionContext;
 import com.tectonica.jdbc.ResultSetIterator;
-import com.tectonica.util.STR;
 import com.tectonica.util.SerializeUtil;
 
 public class SqliteKeyValueStore<V extends Serializable> extends KeyValueStore<String, V>
