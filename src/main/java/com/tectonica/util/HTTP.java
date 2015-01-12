@@ -42,7 +42,7 @@ import javax.xml.bind.DatatypeConverter;
 
 /**
  * General-purpose HTTP utility class for invoking HTTP requests using only Java's standard network packages (in particular, avoiding Apache
- * Commons HttpClient). The class can be be used either by using its all-arguments static method
+ * Commons HttpClient). The class can be be operated either by its all-arguments static method
  * {@link #execute(String, String, String, Headers, Attachment, CookieStore)}, or, more conveniently, by its builder service, accessible via
  * {@link HTTP#url(String)}.
  * <p>
