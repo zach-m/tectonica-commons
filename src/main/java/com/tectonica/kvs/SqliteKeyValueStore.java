@@ -464,7 +464,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 
 	private Iterator<KeyValue<String, V>> entryIteratorOfResultSet(final ExecutionContext ctx)
 	{
-		final ResultSetIterator iter = new ResultSetIterator(ctx);
+		final ResultSetIterator iter = new ResultSetIterator(ctx.rs, ctx.conn);
 		return new Iterator<KeyValue<String, V>>()
 		{
 			@Override
@@ -503,7 +503,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 
 	private Iterator<String> keyIteratorOfResultSet(final ExecutionContext ctx)
 	{
-		final ResultSetIterator iter = new ResultSetIterator(ctx);
+		final ResultSetIterator iter = new ResultSetIterator(ctx.rs, ctx.conn);
 		return new Iterator<String>()
 		{
 			@Override
@@ -528,7 +528,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 
 	private Iterator<V> valueIteratorOfResultSet(final ExecutionContext ctx)
 	{
-		final ResultSetIterator iter = new ResultSetIterator(ctx);
+		final ResultSetIterator iter = new ResultSetIterator(ctx.rs, ctx.conn);
 		return new Iterator<V>()
 		{
 			@Override

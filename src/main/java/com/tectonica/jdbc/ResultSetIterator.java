@@ -24,34 +24,30 @@ import java.sql.SQLException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-import com.tectonica.jdbc.JDBC.ExecutionContext;
-
 /**
  * An {@link Iterator} for going over a result set row-by-row. It does not use the {@link ResultSet#isLast()} method, which isn't
  * implemented by all JDBC providers. Instead, it performs a read-ahead mechanism which is practically costless when scanning the entire
- * result set. When constructed from a {@link ExecutionContext} or from a combination of a {@link ResultSet} and {@link Connection}, it will
- * also close the associated connection after the last row has been retrieved.
+ * result set. When constructed from a combination of a {@link ResultSet} and {@link Connection}, it will also close the associated
+ * connection after the last row has been retrieved.
  * 
  * @author Zach Melamed
  */
 public class ResultSetIterator implements Iterator<ResultSet>
 {
-	private final ExecutionContext ctx;
+	public final Connection conn;
+	public final ResultSet rs;
 	private boolean nextFound = false;
 
 	public ResultSetIterator(ResultSet rs)
 	{
-		this.ctx = new ExecutionContext(null, rs);
+		this.conn = null;
+		this.rs = rs;
 	}
 
 	public ResultSetIterator(ResultSet rs, Connection conn)
 	{
-		this.ctx = new ExecutionContext(conn, rs);
-	}
-
-	public ResultSetIterator(ExecutionContext ctx)
-	{
-		this.ctx = ctx;
+		this.conn = conn;
+		this.rs = rs;
 	}
 
 	@Override
@@ -61,7 +57,7 @@ public class ResultSetIterator implements Iterator<ResultSet>
 		{
 			try
 			{
-				nextFound = ctx.rs.next();
+				nextFound = rs.next();
 			}
 			catch (SQLException e)
 			{
@@ -69,11 +65,11 @@ public class ResultSetIterator implements Iterator<ResultSet>
 			}
 
 			// auto close connection if applicable
-			if (!nextFound && (ctx.conn != null))
+			if (!nextFound && (conn != null))
 			{
 				try
 				{
-					ctx.conn.close();
+					conn.close();
 				}
 				catch (SQLException e)
 				{
@@ -90,7 +86,7 @@ public class ResultSetIterator implements Iterator<ResultSet>
 		if (!hasNext())
 			throw new NoSuchElementException();
 		nextFound = false;
-		return ctx.rs;
+		return rs;
 	}
 
 	@Override
@@ -98,7 +94,7 @@ public class ResultSetIterator implements Iterator<ResultSet>
 	{
 		try
 		{
-			ctx.rs.deleteRow();
+			rs.deleteRow();
 		}
 		catch (SQLException e)
 		{
