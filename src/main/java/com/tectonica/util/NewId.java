@@ -30,7 +30,7 @@ public class NewId
 	private static Random rand = new Random();
 
 	/**
-	 * returns a so-called Time-UUID, i.e. a UUID that guarantees no conflicts at the following probabilities:
+	 * returns a Time-UUID, i.e. a UUID that guarantees no conflicts at the following probabilities:
 	 * <ul>
 	 * <li>99.9999973% (or 1 - 2.7e-8) if called 1,000,000 times in every millisecond
 	 * <li>value of (1 - 2.7e-14) if called once in every microsecond
@@ -56,7 +56,7 @@ public class NewId
 		if (padsCount == 0) // i.e. no alterations required
 			return str;
 
-		if (padsCount < 0) // i.e. need to shorted the string
+		if (padsCount < 0) // i.e. need to shorten the string from left (take rightmost characters)
 			return str.substring(-padsCount, str.length());
 
 		// need to left-pad the string
@@ -79,6 +79,8 @@ public class NewId
 	 */
 	public static String generateLimited(int length)
 	{
+		// TODO: calculate the amount of longs to concatenate based on 'length' 
+		// TODO: maybe 32 is more CPU friendly than 36 here?
 		return boxed(Long.toString(rand.nextLong(), 36), length, '0');
 	}
 }

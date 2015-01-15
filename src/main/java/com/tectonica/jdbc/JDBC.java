@@ -106,6 +106,11 @@ public class JDBC
 			this.conn = conn;
 			this.rs = rs;
 		}
+
+		public ResultSetIterator iterator()
+		{
+			return new ResultSetIterator(rs, conn);
+		}
 	}
 
 	public ExecutionContext startExecute(ConnListener<ResultSet> connListener)
