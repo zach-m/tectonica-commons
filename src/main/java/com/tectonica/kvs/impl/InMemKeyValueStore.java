@@ -34,6 +34,7 @@ import com.tectonica.kvs.AbstractIndex;
 import com.tectonica.kvs.AbstractKeyValueStore;
 import com.tectonica.kvs.Index;
 import com.tectonica.kvs.Index.IndexMapper;
+import com.tectonica.kvs.KvsUtil;
 import com.tectonica.util.SerializeUtil;
 
 public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyValueStore<K, V>
@@ -258,11 +259,6 @@ public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyVa
 			this.dictionary = new ConcurrentMultimap<>();
 		}
 
-		public F getIndexedFieldOf(V value)
-		{
-			return mapper.getIndexedFieldOf(value);
-		}
-
 		@Override
 		public Iterator<KeyValue<K, V>> iteratorOf(F f)
 		{
@@ -279,7 +275,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyVa
 				public KeyValue<K, V> next()
 				{
 					K key = iter.next();
-					return keyValueOf(key, entries.get(key).getValue());
+					return KvsUtil.keyValueOf(key, entries.get(key).getValue());
 				}
 
 				@Override
@@ -325,17 +321,22 @@ public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyVa
 			};
 		}
 
-		protected void map(Object indexField, K toKey)
+		private F getIndexedFieldOf(V value)
+		{
+			return mapper.getIndexedFieldOf(value);
+		}
+
+		private void map(Object indexField, K toKey)
 		{
 			dictionary.put(indexField, toKey);
 		}
 
-		protected void unMap(Object indexField, K toKey)
+		private void unMap(Object indexField, K toKey)
 		{
 			dictionary.remove(indexField, toKey);
 		}
 
-		protected void clear()
+		private void clear()
 		{
 			dictionary.clear();
 		}

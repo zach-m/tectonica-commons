@@ -203,7 +203,7 @@ public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 					V value = cachedValues.get(key);
 					if (value != null)
 					{
-						nextItem = keyValueOf(key, value);
+						nextItem = KvsUtil.keyValueOf(key, value);
 						return true;
 					}
 				}
@@ -329,13 +329,13 @@ public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 	@Override
 	public Set<K> keySet()
 	{
-		return iterateInto(keyIterator(), new HashSet<K>());
+		return KvsUtil.iterateInto(keyIterator(), new HashSet<K>());
 	}
 
 	@Override
 	public List<V> values()
 	{
-		return iterateInto(valueIterator(), new ArrayList<V>());
+		return KvsUtil.iterateInto(valueIterator(), new ArrayList<V>());
 	}
 
 	@Override
@@ -343,7 +343,7 @@ public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 	{
 		if (keys.isEmpty())
 			return Collections.emptyList();
-		return iterateInto(valueIteratorFor(keys, true), new ArrayList<V>());
+		return KvsUtil.iterateInto(valueIteratorFor(keys, true), new ArrayList<V>());
 	}
 
 	@Override
@@ -686,85 +686,5 @@ public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 		if (events != null)
 			for (EventHandler<K, V> event : events)
 				event.handle(type, key, value);
-	}
-
-	/* *********************************************************************************
-	 * 
-	 * INTERNAL UTILS
-	 * 
-	 * *********************************************************************************
-	 */
-
-	protected KeyValue<K, V> keyValueOf(final K key, final V value)
-	{
-		return new KeyValue<K, V>()
-		{
-			@Override
-			public K getKey()
-			{
-				return key;
-			}
-
-			@Override
-			public V getValue()
-			{
-				return value;
-			}
-		};
-	}
-
-	protected static <R, T extends Collection<R>> T iterateInto(Iterator<R> iter, T collection)
-	{
-		while (iter.hasNext())
-			collection.add(iter.next());
-		return collection;
-	}
-
-	protected static <T> Iterable<T> iterableOf(final Iterator<T> iter)
-	{
-		return new Iterable<T>()
-		{
-			@Override
-			public Iterator<T> iterator()
-			{
-				return iter;
-			}
-		};
-	}
-
-	protected static class RawKeyValue<K, V> implements KeyValue<K, V>
-	{
-		private final K key;
-		private final V value;
-
-		public RawKeyValue(K key, V value)
-		{
-			this.key = key;
-			this.value = value;
-		}
-
-		@Override
-		public K getKey()
-		{
-			return key;
-		}
-
-		@Override
-		public V getValue()
-		{
-			return value;
-		}
-	}
-
-	protected static <K, V> List<KeyValue<K, V>> orderByKeys(Map<K, V> entries, Collection<K> keys)
-	{
-		List<KeyValue<K, V>> ordered = new ArrayList<>();
-		for (K key : keys)
-		{
-			V value = entries.get(key);
-			if (value != null)
-				ordered.add(new RawKeyValue<K, V>(key, value));
-		}
-		return ordered;
 	}
 }

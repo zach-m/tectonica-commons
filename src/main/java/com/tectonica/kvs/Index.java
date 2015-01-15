@@ -13,6 +13,8 @@ public interface Index<K, V, F>
 		public F getIndexedFieldOf(V value);
 	}
 
+	String getName();
+
 	Iterator<KeyValue<K, V>> iteratorOf(F f);
 
 	Iterator<K> keyIteratorOf(F f);
@@ -38,6 +40,4 @@ public interface Index<K, V, F>
 	K getFirstKey(F f);
 
 	V getFirstValue(F f);
-
-	String getName();
 }

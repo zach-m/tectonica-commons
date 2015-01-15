@@ -43,6 +43,7 @@ import com.tectonica.kvs.AbstractIndex;
 import com.tectonica.kvs.AbstractKeyValueStore;
 import com.tectonica.kvs.Index;
 import com.tectonica.kvs.Index.IndexMapper;
+import com.tectonica.kvs.KvsUtil;
 import com.tectonica.util.SerializeUtil;
 
 public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValueStore<String, V>
@@ -113,7 +114,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 				return conn.createStatement().executeQuery(sqlSelectAll());
 			}
 		});
-		return entryIteratorOfResultSet(ctx);
+		return entryIteratorOfResultSet(ctx.iterator());
 	}
 
 	@Override
@@ -136,7 +137,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 					prefetch.put(rs.getString(1), rs.getBytes(2));
 
 				// sort by the same order of the keys passed by the user
-				List<KeyValue<String, byte[]>> ordered = orderByKeys(prefetch, keys);
+				List<KeyValue<String, byte[]>> ordered = KvsUtil.orderByKeys(prefetch, keys);
 				return entryIteratorOfBytesIter(ordered.iterator());
 			}
 		});
@@ -153,7 +154,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 				return conn.createStatement().executeQuery(sqlSelectAll());
 			}
 		});
-		return keyIteratorOfResultSet(ctx);
+		return keyIteratorOfResultSet(ctx.iterator());
 	}
 
 	@Override
@@ -167,7 +168,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 				return conn.createStatement().executeQuery(sqlSelectAll());
 			}
 		});
-		return valueIteratorOfResultSet(ctx);
+		return valueIteratorOfResultSet(ctx.iterator());
 	}
 
 	@Override
@@ -354,7 +355,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 			return valueIteratorOfResultSet(selectByIndex(f));
 		}
 
-		private ExecutionContext selectByIndex(final F f)
+		private ResultSetIterator selectByIndex(final F f)
 		{
 			ExecutionContext ctx = jdbc.startExecute(new ConnListener<ResultSet>()
 			{
@@ -366,7 +367,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 					return stmt.executeQuery();
 				}
 			});
-			return ctx;
+			return ctx.iterator();
 		}
 
 		private String getIndexedFieldOf(V value)
@@ -466,9 +467,8 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 		});
 	}
 
-	private Iterator<KeyValue<String, V>> entryIteratorOfResultSet(final ExecutionContext ctx)
+	private Iterator<KeyValue<String, V>> entryIteratorOfResultSet(final ResultSetIterator iter)
 	{
-		final ResultSetIterator iter = ctx.iterator();
 		return new Iterator<KeyValue<String, V>>()
 		{
 			@Override
@@ -505,9 +505,8 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 		};
 	}
 
-	private Iterator<String> keyIteratorOfResultSet(final ExecutionContext ctx)
+	private Iterator<String> keyIteratorOfResultSet(final ResultSetIterator iter)
 	{
-		final ResultSetIterator iter = ctx.iterator();
 		return new Iterator<String>()
 		{
 			@Override
@@ -530,9 +529,8 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 		};
 	}
 
-	private Iterator<V> valueIteratorOfResultSet(final ExecutionContext ctx)
+	private Iterator<V> valueIteratorOfResultSet(final ResultSetIterator iter)
 	{
-		final ResultSetIterator iter = ctx.iterator();
 		return new Iterator<V>()
 		{
 			@Override
