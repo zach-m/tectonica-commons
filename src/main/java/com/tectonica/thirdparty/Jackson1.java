@@ -31,6 +31,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.SerializationConfig;
 import org.codehaus.jackson.map.annotate.JsonSerialize.Inclusion;
 import org.codehaus.jackson.node.ArrayNode;
+import org.codehaus.jackson.type.JavaType;
 
 /**
  * Convenience wrapper for Jackson APIs version 1.x. Requires:
@@ -198,6 +199,45 @@ public class Jackson1
 		}
 	}
 
+	public static <T, P> T fromJson(String jsonStr, Class<T> clz, Class<P> paramClz, ObjectMapper mapper)
+	{
+		try
+		{
+			JavaType jt = mapper.getTypeFactory().constructParametricType(clz, paramClz);
+			return mapper.readValue(jsonStr, jt);
+		}
+		catch (IOException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public static <T, P> T fromJson(InputStream is, Class<T> clz, Class<P> paramClz, ObjectMapper mapper)
+	{
+		try
+		{
+			JavaType jt = mapper.getTypeFactory().constructParametricType(clz, paramClz);
+			return mapper.readValue(is, jt);
+		}
+		catch (IOException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	public static <T, P> T fromJson(Reader r, Class<T> clz, Class<P> paramClz, ObjectMapper mapper)
+	{
+		try
+		{
+			JavaType jt = mapper.getTypeFactory().constructParametricType(clz, paramClz);
+			return mapper.readValue(r, jt);
+		}
+		catch (IOException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
 	// ///////////////////////////////////////////////////////////////////
 
 	public static String propsToJson(Object o)
@@ -230,6 +270,21 @@ public class Jackson1
 		return fromJson(r, clz, propsMapper);
 	}
 
+	public static <T, P> T propsFromJson(String jsonStr, Class<T> clz, Class<P> paramClz)
+	{
+		return fromJson(jsonStr, clz, paramClz, propsMapper);
+	}
+
+	public static <T, P> T propsFromJson(InputStream is, Class<T> clz, Class<P> paramClz)
+	{
+		return fromJson(is, clz, paramClz, propsMapper);
+	}
+
+	public static <T, P> T propsFromJson(Reader r, Class<T> clz, Class<P> paramClz)
+	{
+		return fromJson(r, clz, paramClz, propsMapper);
+	}
+
 	public static String fieldsToJson(Object o)
 	{
 		return toJson(o, fieldsMapper);
@@ -258,5 +313,20 @@ public class Jackson1
 	public static <T> T fieldsFromJson(Reader r, Class<T> clz)
 	{
 		return fromJson(r, clz, fieldsMapper);
+	}
+
+	public static <T, P> T fieldsFromJson(String jsonStr, Class<T> clz, Class<P> paramClz)
+	{
+		return fromJson(jsonStr, clz, paramClz, fieldsMapper);
+	}
+
+	public static <T, P> T fieldsFromJson(InputStream is, Class<T> clz, Class<P> paramClz)
+	{
+		return fromJson(is, clz, paramClz, fieldsMapper);
+	}
+
+	public static <T, P> T fieldsFromJson(Reader r, Class<T> clz, Class<P> paramClz)
+	{
+		return fromJson(r, clz, paramClz, fieldsMapper);
 	}
 }
