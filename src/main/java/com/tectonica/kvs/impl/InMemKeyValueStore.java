@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.kvs;
+package com.tectonica.kvs.impl;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -30,6 +30,10 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.tectonica.collections.ConcurrentMultimap;
+import com.tectonica.kvs.AbstractIndex;
+import com.tectonica.kvs.AbstractKeyValueStore;
+import com.tectonica.kvs.Index;
+import com.tectonica.kvs.Index.IndexMapper;
 import com.tectonica.util.SerializeUtil;
 
 public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyValueStore<K, V>
@@ -244,7 +248,7 @@ public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyVa
 	 * 
 	 * @author Zach Melamed
 	 */
-	public class InMemIndexImpl<F> extends Index<K, V, F>
+	public class InMemIndexImpl<F> extends AbstractIndex<K, V, F>
 	{
 		private ConcurrentMultimap<Object, K> dictionary;
 
@@ -252,6 +256,11 @@ public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyVa
 		{
 			super(mapper, name);
 			this.dictionary = new ConcurrentMultimap<>();
+		}
+
+		public F getIndexedFieldOf(V value)
+		{
+			return mapper.getIndexedFieldOf(value);
 		}
 
 		@Override
@@ -343,8 +352,8 @@ public class InMemKeyValueStore<K, V extends Serializable> extends AbstractKeyVa
 		for (int i = 0; i < indexes.size(); i++)
 		{
 			InMemIndexImpl<?> index = indexes.get(i);
-			Object oldField = (oldEntry == null) ? null : index.mapper.getIndexedFieldOf(oldEntry);
-			Object newField = (newEntry == null) ? null : index.mapper.getIndexedFieldOf(newEntry);
+			Object oldField = (oldEntry == null) ? null : index.getIndexedFieldOf(oldEntry);
+			Object newField = (newEntry == null) ? null : index.getIndexedFieldOf(newEntry);
 			boolean valueChanged = ((oldField == null) != (newField == null)) || ((oldField != null) && !oldField.equals(newField));
 			if (valueChanged)
 			{

@@ -31,34 +31,10 @@ import java.util.Set;
 import java.util.concurrent.locks.Lock;
 
 import com.tectonica.collections.ConcurrentMultimap;
-import com.tectonica.kvs.AbstractKeyValueStore.KeyValue;
+import com.tectonica.kvs.Index.IndexMapper;
 
-/**
- * Simple, yet powerful, framework (and approach) for handling a key-value store. It allows for multiple concurrent readers but a single
- * concurrent writer on each entry. It also provides a read-before-update mechanism which makes life simpler and keeps data consistent.
- * Indexing is also supported as part of the framework. The interface is intuitive and straightforward. This class itself is abstract and
- * subclasses are included for several backend persistence engines, including in-memory (which is great for development).
- * <p>
- * The usage of this framework would probably yield the most benefit when used to prototype a data model, where changes are frequent and not
- * backwards-compatible. However, in more than a few scenarios, this framework can be used in production. The heavy-lifting is done by the
- * backend database and cache either way.
- * 
- * @author Zach Melamed
- */
-public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K, V>>
+public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 {
-	public interface KeyValue<K, V>
-	{
-		K getKey();
-
-		V getValue();
-	}
-
-	public interface KeyMapper<K, V>
-	{
-		public K getKeyOf(V value);
-	}
-
 	protected final KeyMapper<K, V> keyMapper;
 
 	/**
@@ -79,44 +55,6 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	{
 		cache = createCache();
 		usingCache = (cache != null);
-	}
-
-	/***********************************************************************************
-	 * 
-	 * CACHE
-	 * 
-	 ***********************************************************************************/
-
-	protected Cache<K, V> cache;
-	protected boolean usingCache;
-
-	protected static interface Cache<K, V>
-	{
-		V get(K key);
-
-		Map<K, V> get(Collection<K> keys);
-
-		void put(K key, V value);
-
-		void put(Map<K, V> values);
-
-		void delete(K key);
-
-		void deleteAll();
-	}
-
-	/**
-	 * overridden by subclasses that wish to support a caching mechanism
-	 */
-	protected Cache<K, V> createCache()
-	{
-		return null;
-	}
-
-	public void clearCache()
-	{
-		if (usingCache)
-			cache.deleteAll();
 	}
 
 	/* *********************************************************************************
@@ -149,11 +87,13 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 
 	// ///////////////////////////////////////////////////////////////////////////////////////
 
+	@Override
 	public V get(K key)
 	{
 		return get(key, true);
 	}
 
+	@Override
 	public V get(K key, boolean cacheResult)
 	{
 		if (!usingCache)
@@ -172,6 +112,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	/**
 	 * Executes {@link #iteratorFor(Collection, boolean)} with {@code postponeCaching} set to false
 	 */
+	@Override
 	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys)
 	{
 		return iteratorFor(keys, false);
@@ -190,6 +131,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 *            indicates whether cache entries individually as each is read from the backend storage, or cache them all in a single call
 	 *            at the end of the iteration (use only if you'll certainly iterate through the entire result)
 	 */
+	@Override
 	public Iterator<KeyValue<K, V>> iteratorFor(final Collection<K> keys, final boolean postponeCaching)
 	{
 		if (keys.isEmpty())
@@ -297,6 +239,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		};
 	}
 
+	@Override
 	public Iterator<K> keyIterator()
 	{
 		final Iterator<KeyValue<K, V>> iter = iterator();
@@ -322,6 +265,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		};
 	}
 
+	@Override
 	public Iterator<V> valueIterator()
 	{
 		final Iterator<KeyValue<K, V>> iter = iterator();
@@ -347,11 +291,13 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		};
 	}
 
+	@Override
 	public Iterator<V> valueIteratorFor(Collection<K> keys)
 	{
 		return valueIteratorFor(keys, false);
 	}
 
+	@Override
 	public Iterator<V> valueIteratorFor(Collection<K> keys, boolean postponeCaching)
 	{
 		if (keys.isEmpty())
@@ -380,16 +326,19 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		};
 	}
 
+	@Override
 	public Set<K> keySet()
 	{
 		return iterateInto(keyIterator(), new HashSet<K>());
 	}
 
+	@Override
 	public List<V> values()
 	{
 		return iterateInto(valueIterator(), new ArrayList<V>());
 	}
 
+	@Override
 	public List<V> valuesFor(Collection<K> keys)
 	{
 		if (keys.isEmpty())
@@ -397,6 +346,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		return iterateInto(valueIteratorFor(keys, true), new ArrayList<V>());
 	}
 
+	@Override
 	public boolean containsKey(K key)
 	{
 		// NOTE: the implementation here avoid serialization, but does caching. you'll probably want to override..
@@ -413,13 +363,13 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	/**
 	 * an interface for managing a modification process of an existing entry. there are two types of such modification:
 	 * <ul>
-	 * <li>using {@link AbstractKeyValueStore#put(Object, Object)}: in such case only the {@link #dbPut(Object)} method will be invoked. it will be
+	 * <li>using {@link KeyValueStore#put(Object, Object)}: in such case only the {@link #dbPut(Object)} method will be invoked. it will be
 	 * passed an updated value for an existing key.
-	 * <li>using {@link AbstractKeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
+	 * <li>using {@link KeyValueStore#update(Object, Updater)}: in such case first the {@link #getModifiableValue()} method will be invoked,
 	 * generating an instance for the caller to safely modify, and then the {@link #dbPut(Object)} method will be invoked on that modified
 	 * instance.
 	 * </ul>
-	 * both methods are invoked under the concurrency protection a lock provided with {@link AbstractKeyValueStore#getModificationLock(Object)}.
+	 * both methods are invoked under the concurrency protection a lock provided with {@link KeyValueStore#getModificationLock(Object)}.
 	 */
 	protected interface Modifier<K, V>
 	{
@@ -433,7 +383,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		V getModifiableValue();
 
 		/**
-		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link AbstractKeyValueStore#get(Object, boolean)} will
+		 * Makes the changes to an entry permanent. After this method finishes, calls to {@link KeyValueStore#get(Object, boolean)} will
 		 * return the updated value.
 		 * <p>
 		 * NOTE: this method is called only on a locked entry
@@ -459,52 +409,6 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 */
 	protected abstract Lock getModificationLock(K key);
 
-	public static abstract class Updater<V>
-	{
-		private boolean stopped = false;
-		private boolean changed = false;
-
-		protected void stopIteration()
-		{
-			stopped = true;
-		}
-
-		public boolean isChanged()
-		{
-			return changed;
-		}
-
-		/**
-		 * method inside which an entry may be safely modified with no concurrency or shared-state concerns
-		 * 
-		 * @param value
-		 *            thread-safe entry on which the modifications are to be performed. never a null.
-		 * @return
-		 *         true if the method indeed changed the entry
-		 */
-		public abstract boolean update(V value);
-
-		/**
-		 * executes after the persistence has happened and getters return the new value. however, the entry is still locked at that point
-		 * and can be addressed without any concern that another updater tries to start a modification.
-		 * <p>
-		 * IMPORTANT: do not make any modifications to the passed entry inside this method
-		 */
-		public void postPersist(V value)
-		{}
-
-		/**
-		 * called if an update process was requested on a non existing key
-		 */
-		public void entryNotFound()
-		{}
-	}
-
-	public static interface ValueGenerator<K, V>
-	{
-		V generate(K key);
-	}
-
 	/* *********************************************************************************
 	 * 
 	 * SETTERS
@@ -519,6 +423,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 * compared to {@link #put(Object, Object)} as it doesn't use any locking. do not use if you're not completely sure whether the key
 	 * already exists. the behavior of the store in such case is undetermined and implementation-dependent.
 	 */
+	@Override
 	public void add(K key, V value)
 	{
 		fireEvent(EventType.PreAdd, key, value);
@@ -531,6 +436,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 * inserts or updates an entry. if you're sure that the entry is new (i.e. its key doesn't already exist), use the more efficient
 	 * {@link #add(Object, Object)} instead
 	 */
+	@Override
 	public void put(K key, V value)
 	{
 		Lock lock = getModificationLock(key);
@@ -560,6 +466,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 * @return
 	 *         the newly added value, or null if nothing was inserted
 	 */
+	@Override
 	public V putIfAbsent(K key, ValueGenerator<K, V> generator)
 	{
 		Lock lock = getModificationLock(key);
@@ -579,6 +486,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		}
 	}
 
+	@Override
 	public V update(K key, Updater<V> updater)
 	{
 		Lock lock = getModificationLock(key);
@@ -620,6 +528,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		}
 	}
 
+	@Override
 	public void update(Collection<K> keys, Updater<V> updater)
 	{
 		for (K key : keys)
@@ -640,6 +549,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	/**
 	 * convenience method to update all entries
 	 */
+	@Override
 	public void updateAll(Updater<V> updater)
 	{
 		update(keySet(), updater);
@@ -650,6 +560,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 * 
 	 * @see {@link #update(Object, Updater)}
 	 */
+	@Override
 	public V updateValue(V value, Updater<V> updater)
 	{
 		return update(keyMapper.getKeyOf(value), updater);
@@ -660,6 +571,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 * 
 	 * @see {@link #add(Object, Object)}
 	 */
+	@Override
 	public void addValue(V value)
 	{
 		add(keyMapper.getKeyOf(value), value);
@@ -670,6 +582,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 	 * 
 	 * @see {@link #put(Object, Object)}
 	 */
+	@Override
 	public void putValue(V value)
 	{
 		put(keyMapper.getKeyOf(value), value);
@@ -686,6 +599,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 
 	protected abstract int dbDeleteAll();
 
+	@Override
 	public boolean delete(K key)
 	{
 		if (usingCache)
@@ -693,11 +607,62 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		return dbDelete(key);
 	}
 
+	@Override
 	public int deleteAll()
 	{
 		if (usingCache)
 			cache.deleteAll();
 		return dbDeleteAll();
+	}
+
+	/* *********************************************************************************
+	 * 
+	 * INDEXES
+	 * 
+	 * *********************************************************************************
+	 */
+
+	@Override
+	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
+
+	/* *********************************************************************************
+	 * 
+	 * CACHE
+	 * 
+	 * *********************************************************************************
+	 */
+
+	protected Cache<K, V> cache;
+	protected boolean usingCache;
+
+	protected static interface Cache<K, V>
+	{
+		V get(K key);
+
+		Map<K, V> get(Collection<K> keys);
+
+		void put(K key, V value);
+
+		void put(Map<K, V> values);
+
+		void delete(K key);
+
+		void deleteAll();
+	}
+
+	/**
+	 * overridden by subclasses that wish to support a caching mechanism
+	 */
+	protected Cache<K, V> createCache()
+	{
+		return null;
+	}
+
+	@Override
+	public void clearCache()
+	{
+		if (usingCache)
+			cache.deleteAll();
 	}
 
 	/* *********************************************************************************
@@ -709,16 +674,7 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 
 	protected ConcurrentMultimap<EventType, EventHandler<K, V>> handlers = new ConcurrentMultimap<>();
 
-	public static enum EventType
-	{
-		PreUpdate, PrePersistUpdate, PreAdd, PrePut;
-	}
-
-	public interface EventHandler<K, V>
-	{
-		public void handle(EventType type, K key, V value);
-	}
-
+	@Override
 	public void addListener(EventType type, EventHandler<K, V> handler)
 	{
 		handlers.put(type, handler);
@@ -730,109 +686,6 @@ public abstract class AbstractKeyValueStore<K, V> implements Iterable<KeyValue<K
 		if (events != null)
 			for (EventHandler<K, V> event : events)
 				event.handle(type, key, value);
-	}
-
-	/* *********************************************************************************
-	 * 
-	 * INDEXES
-	 * 
-	 * *********************************************************************************
-	 */
-
-	public abstract <F> Index<K, V, F> createIndex(String indexName, IndexMapper<V, F> mapFunc);
-
-	public interface IndexMapper<V, F>
-	{
-		public F getIndexedFieldOf(V value);
-	}
-
-	public static abstract class Index<K, V, F>
-	{
-		protected final IndexMapper<V, F> mapper;
-		protected final String name;
-
-		protected Index(IndexMapper<V, F> mapper, String name)
-		{
-			this.mapper = mapper;
-
-			if (name == null || name.isEmpty())
-				throw new RuntimeException("index name is mandatory in " + Index.class.getSimpleName());
-			this.name = name;
-		}
-
-		// ///////////////////////////////////////////////////////////////////////////////////////
-
-		public abstract Iterator<KeyValue<K, V>> iteratorOf(F f);
-
-		public abstract Iterator<K> keyIteratorOf(F f);
-
-		public abstract Iterator<V> valueIteratorOf(F f);
-
-		// ///////////////////////////////////////////////////////////////////////////////////////
-
-		public boolean containsKeyOf(F f)
-		{
-			return (keyIteratorOf(f).hasNext());
-		}
-
-		public Set<K> keySetOf(F f)
-		{
-			return iterateInto(keyIteratorOf(f), new HashSet<K>());
-		}
-
-		public List<V> valuesOf(F f)
-		{
-			return iterateInto(valueIteratorOf(f), new ArrayList<V>());
-		}
-
-		public List<KeyValue<K, V>> entriesOf(F f)
-		{
-			return iterateInto(iteratorOf(f), new ArrayList<KeyValue<K, V>>());
-		}
-
-		public Iterable<KeyValue<K, V>> asIterableOf(F f)
-		{
-			return iterableOf(iteratorOf(f));
-		}
-
-		public Iterable<K> asKeyIterableOf(F f)
-		{
-			return iterableOf(keyIteratorOf(f));
-		}
-
-		public Iterable<V> asValueIterableOf(F f)
-		{
-			return iterableOf(valueIteratorOf(f));
-		}
-
-		public KeyValue<K, V> getFirstEntry(F f)
-		{
-			Iterator<KeyValue<K, V>> iter = iteratorOf(f);
-			if (iter.hasNext())
-				return iter.next();
-			return null;
-		}
-
-		public K getFirstKey(F f)
-		{
-			Iterator<K> iter = keyIteratorOf(f);
-			if (iter.hasNext())
-				return iter.next();
-			return null;
-		}
-
-		public V getFirstValue(F f)
-		{
-			Iterator<V> iter = valueIteratorOf(f);
-			if (iter.hasNext())
-				return iter.next();
-			return null;
-		}
-
-		public String getName()
-		{
-			return name;
-		}
 	}
 
 	/* *********************************************************************************

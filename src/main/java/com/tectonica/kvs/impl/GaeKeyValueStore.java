@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.kvs;
+package com.tectonica.kvs.impl;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -44,6 +44,10 @@ import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.tectonica.gae.GaeMemcacheLock;
+import com.tectonica.kvs.AbstractIndex;
+import com.tectonica.kvs.AbstractKeyValueStore;
+import com.tectonica.kvs.Index;
+import com.tectonica.kvs.Index.IndexMapper;
 import com.tectonica.thirdparty.KryoUtil;
 import com.tectonica.util.SerializeUtil;
 
@@ -286,7 +290,7 @@ public class GaeKeyValueStore<V extends Serializable> extends AbstractKeyValueSt
 	 * 
 	 * @author Zach Melamed
 	 */
-	private class GaeIndexImpl<F> extends Index<String, V, F>
+	private class GaeIndexImpl<F> extends AbstractIndex<String, V, F>
 	{
 		public GaeIndexImpl(IndexMapper<V, F> mapFunc, String name)
 		{
@@ -639,5 +643,5 @@ public class GaeKeyValueStore<V extends Serializable> extends AbstractKeyValueSt
 		{
 			mc.clearAll();
 		}
-	};
+	}
 }

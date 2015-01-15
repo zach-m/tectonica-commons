@@ -1,8 +1,8 @@
 package com.tectonica.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -12,17 +12,20 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.tectonica.kvs.AbstractKeyValueStore;
-import com.tectonica.kvs.AbstractKeyValueStore.Updater;
+import com.tectonica.kvs.Index;
+import com.tectonica.kvs.Index.IndexMapper;
+import com.tectonica.kvs.KeyValueStore;
+import com.tectonica.kvs.KeyValueStore.KeyMapper;
+import com.tectonica.kvs.Updater;
 
 public abstract class TestKeyValueStore
 {
-	protected AbstractKeyValueStore<String, Topic> store;
-	protected AbstractKeyValueStore.Index<String, Topic, String> bundleToTopicId;
+	protected KeyValueStore<String, Topic> store;
+	protected Index<String, Topic, String> bundleToTopicId;
 
-	protected abstract AbstractKeyValueStore<String, Topic> createStore();
+	protected abstract KeyValueStore<String, Topic> createStore();
 
-	protected AbstractKeyValueStore.KeyMapper<String, Topic> keyMapper = new AbstractKeyValueStore.KeyMapper<String, Topic>()
+	protected KeyMapper<String, Topic> keyMapper = new KeyMapper<String, Topic>()
 	{
 		@Override
 		public String getKeyOf(Topic topic)
@@ -38,7 +41,7 @@ public abstract class TestKeyValueStore
 	{
 		store = createStore();
 
-		bundleToTopicId = store.createIndex("b2t", new AbstractKeyValueStore.IndexMapper<Topic, String>()
+		bundleToTopicId = store.createIndex("b2t", new IndexMapper<Topic, String>()
 		{
 			@Override
 			public String getIndexedFieldOf(Topic topic)
@@ -65,10 +68,10 @@ public abstract class TestKeyValueStore
 		store.addValue(t3 = new Topic("003", "type3", TopicKind.AAA));
 		store.addValue(t4 = new Topic("004", "type3", TopicKind.AAA));
 		store.clearCache();
-		
+
 		assertTrue(store.containsKey("001"));
 		assertFalse(store.containsKey("xxx"));
-		
+
 		System.err.println("-----------------------------------------------");
 		System.err.println("[TEST]  " + (t = store.get("001")));
 		assertEquals(t, t1);

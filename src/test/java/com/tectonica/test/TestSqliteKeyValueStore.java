@@ -1,12 +1,12 @@
 package com.tectonica.test;
 
-import com.tectonica.kvs.AbstractKeyValueStore;
-import com.tectonica.kvs.SqliteKeyValueStore;
+import com.tectonica.kvs.KeyValueStore;
+import com.tectonica.kvs.impl.SqliteKeyValueStore;
 
 public class TestSqliteKeyValueStore extends TestKeyValueStore
 {
 	@Override
-	protected AbstractKeyValueStore<String, Topic> createStore()
+	protected KeyValueStore<String, Topic> createStore()
 	{
 		return new SqliteKeyValueStore<>(Topic.class, connStr(), keyMapper);
 	}

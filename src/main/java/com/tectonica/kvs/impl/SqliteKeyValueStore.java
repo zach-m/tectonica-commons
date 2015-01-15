@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.tectonica.kvs;
+package com.tectonica.kvs.impl;
 
 import java.io.Serializable;
 import java.sql.Connection;
@@ -39,6 +39,10 @@ import com.tectonica.jdbc.JDBC.ConnListener;
 import com.tectonica.jdbc.JDBC.ExecutionContext;
 import com.tectonica.jdbc.ResultSetIterator;
 import com.tectonica.jdbc.SqliteUtil;
+import com.tectonica.kvs.AbstractIndex;
+import com.tectonica.kvs.AbstractKeyValueStore;
+import com.tectonica.kvs.Index;
+import com.tectonica.kvs.Index.IndexMapper;
 import com.tectonica.util.SerializeUtil;
 
 public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValueStore<String, V>
@@ -325,7 +329,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 		return index;
 	}
 
-	private class SqliteIndexImpl<F> extends Index<String, V, F>
+	private class SqliteIndexImpl<F> extends AbstractIndex<String, V, F>
 	{
 		public SqliteIndexImpl(IndexMapper<V, F> mapFunc, String name)
 		{
@@ -464,7 +468,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 
 	private Iterator<KeyValue<String, V>> entryIteratorOfResultSet(final ExecutionContext ctx)
 	{
-		final ResultSetIterator iter = new ResultSetIterator(ctx.rs, ctx.conn);
+		final ResultSetIterator iter = ctx.iterator();
 		return new Iterator<KeyValue<String, V>>()
 		{
 			@Override
@@ -503,7 +507,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 
 	private Iterator<String> keyIteratorOfResultSet(final ExecutionContext ctx)
 	{
-		final ResultSetIterator iter = new ResultSetIterator(ctx.rs, ctx.conn);
+		final ResultSetIterator iter = ctx.iterator();
 		return new Iterator<String>()
 		{
 			@Override
@@ -528,7 +532,7 @@ public class SqliteKeyValueStore<V extends Serializable> extends AbstractKeyValu
 
 	private Iterator<V> valueIteratorOfResultSet(final ExecutionContext ctx)
 	{
-		final ResultSetIterator iter = new ResultSetIterator(ctx.rs, ctx.conn);
+		final ResultSetIterator iter = ctx.iterator();
 		return new Iterator<V>()
 		{
 			@Override
