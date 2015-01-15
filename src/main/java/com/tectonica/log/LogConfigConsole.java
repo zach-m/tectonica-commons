@@ -21,6 +21,7 @@ package com.tectonica.log;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
 import java.util.logging.LogManager;
 
 /**
@@ -50,7 +51,7 @@ import java.util.logging.LogManager;
  */
 public class LogConfigConsole
 {
-	private static final String DEFAULT_LEVEL = "INFO";
+	private static final String DEFAULT_LEVEL = Level.INFO.getName();
 	private static final String DEFAULT_FORMATTER = LogFormat.class.getName();
 
 	public LogConfigConsole() throws Exception
@@ -65,15 +66,16 @@ public class LogConfigConsole
 
 		StringBuilder props = new StringBuilder();
 
-		// configure globals
+		// configure levels
 		props.append(".level = ").append(level).append("\n");
+		// TODO: props.append("LOGGERNAME.level = ").append(SPECIFIC_LEVEL).append("\n");
 
 		// configure handlers
 		String con = ConsoleHandler.class.getName();
 		props.append("handlers = ").append(con).append("\n");
 
 		// configure console handler
-		props.append(con).append(".level = ").append(level).append("\n");
+		props.append(con).append(".level = ALL").append("\n");
 		props.append(con).append(".formatter = ").append(formatterClassName).append("\n");
 
 		// apply configuration
