@@ -51,6 +51,7 @@ import javax.xml.bind.DatatypeConverter;
  * <li>Provide custom headers
  * <li>Receive cookies and send them in consequent requests (using a {@link CookieStore})
  * <li>Add "attachment" (i.e. send a multipart content)
+ * <li>Measure latency
  * </ul>
  * 
  * @author Zach Melamed
@@ -207,29 +208,42 @@ public class HTTP
 				conn.setRequestProperty(header.getKey(), header.getValue());
 			if (cs != null && !cs.isEmpty())
 				conn.setRequestProperty("Cookie", cs.toHeader());
+
+//			// TODO: support extra options:
 //			conn.setRequestProperty("Connection", "Keep-Alive");
 //			conn.setRequestProperty("Cache-Control", "no-cache");
+//			conn.setReadTimeout(30000);
+//			conn.setConnectTimeout(30000);
 
 			// send the request's body
 			if (sendText)
 			{
 				byte[] requestContent = body.getBytes();
 				conn.setRequestProperty("Content-Length", "" + requestContent.length);
-				OutputStream out = conn.getOutputStream();
-				out.write(requestContent);
-				out.close();
+				try (OutputStream out = conn.getOutputStream())
+				{
+					out.write(requestContent);
+					out.flush();
+				}
+
+//				// TODO: support more efficient alternative, but without sending "Content-Length"
+//				try (Writer writer = new OutputStreamWriter(conn.getOutputStream()))
+//				{
+//					writer.write(body);
+//					writer.flush();
+//				}
 			}
 			else if (sendMultipart)
 			{
 				conn.setRequestProperty("Content-Type", "multipart/form-data;boundary=" + BOUNDARY);
-				DataOutputStream out = new DataOutputStream(conn.getOutputStream());
-				writeFile(attachment.getStream(), attachment.fieldName, attachment.fileName, out); // can be re-iterated with other files
-				out.writeBytes(HYPHENS + BOUNDARY + HYPHENS + CRLF);
-				out.flush();
-				out.close();
+				try (DataOutputStream out = new DataOutputStream(conn.getOutputStream()))
+				{
+					writeFile(attachment.getStream(), attachment.fieldName, attachment.fileName, out); // TODO: re-iterate with other files
+					out.writeBytes(HYPHENS + BOUNDARY + HYPHENS + CRLF);
+					out.flush();
+				}
 			}
 
-//			conn.connect(); // redundant, just clearer
 			Map<String, List<String>> responseHeaders = conn.getHeaderFields();
 			if (cs != null)
 				cs.fromHeader(responseHeaders.get("Set-Cookie"));
@@ -238,10 +252,6 @@ public class HTTP
 			int statusCode = conn.getResponseCode();
 			InputStream is = (statusCode / 100 == 2) ? conn.getInputStream() : conn.getErrorStream();
 
-//			conn.disconnect();
-
-			// remove the trailing NL
-
 			String content = (is == null) ? "" : streamToContent(is);
 			long latency = System.currentTimeMillis() - timeBefore;
 			return new HttpResponse(statusCode, content, responseHeaders, latency);
@@ -249,11 +259,6 @@ public class HTTP
 		catch (Exception e)
 		{
 			throw new RuntimeException(e);
-		}
-		finally
-		{
-			if (conn != null)
-				conn.disconnect();
 		}
 	}
 
@@ -273,12 +278,14 @@ public class HTTP
 	{
 		StringBuffer sb = new StringBuffer();
 
-		BufferedReader in = new BufferedReader(new InputStreamReader(is));
-		String line;
-		while ((line = in.readLine()) != null)
-			sb.append(line).append("\n");
-		in.close();
+		try (BufferedReader in = new BufferedReader(new InputStreamReader(is)))
+		{
+			String line;
+			while ((line = in.readLine()) != null)
+				sb.append(line).append("\n");
+		}
 
+		// remove the trailing NL
 		return (sb.length() == 0) ? "" : sb.substring(0, sb.length() - "\n".length());
 	}
 
