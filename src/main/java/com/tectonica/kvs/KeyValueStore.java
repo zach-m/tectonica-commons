@@ -116,12 +116,12 @@ public interface KeyValueStore<K, V> extends Iterable<KeyValue<K, V>>
 
 	V update(K key, Updater<V> updater);
 
-	void update(Collection<K> keys, Updater<V> updater);
+	int update(Collection<K> keys, Updater<V> updater);
 
 	/**
 	 * convenience method to update all entries
 	 */
-	void updateAll(Updater<V> updater);
+	int updateAll(Updater<V> updater);
 
 	/**
 	 * convenience method applicable when {@code keyMapper} is provided

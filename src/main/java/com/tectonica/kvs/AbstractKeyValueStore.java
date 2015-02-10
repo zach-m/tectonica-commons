@@ -529,14 +529,18 @@ public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 	}
 
 	@Override
-	public void update(Collection<K> keys, Updater<V> updater)
+	public int update(Collection<K> keys, Updater<V> updater)
 	{
+		int count = 0;
 		for (K key : keys)
 		{
 			update(key, updater);
+			if (updater.changed)
+				count++;
 			if (updater.stopped)
 				break;
 		}
+		return count;
 	}
 
 	/* *********************************************************************************
@@ -550,9 +554,9 @@ public abstract class AbstractKeyValueStore<K, V> implements KeyValueStore<K, V>
 	 * convenience method to update all entries
 	 */
 	@Override
-	public void updateAll(Updater<V> updater)
+	public int updateAll(Updater<V> updater)
 	{
-		update(keySet(), updater);
+		return update(keySet(), updater);
 	}
 
 	/**

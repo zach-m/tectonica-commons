@@ -88,12 +88,12 @@ public class PubnubUtil
 		urlFmt = PUBNUB_PUBLISH_URL_PREFIX + publishKey + "/" + subscribeKey + "/0/%s/0/%s";
 	}
 
-	public void sendText(String channel, String txtMsg)
+	public boolean sendText(String channel, String txtMsg)
 	{
-		sendJson(channel, stringAsJson(txtMsg));
+		return sendJson(channel, stringAsJson(txtMsg));
 	}
 
-	public void sendJson(String channel, String jsonMsg)
+	public boolean sendJson(String channel, String jsonMsg)
 	{
 		String url = String.format(urlFmt, urlEncoded(channel), urlEncoded(jsonMsg));
 		HttpURLConnection conn = null;
@@ -113,11 +113,13 @@ public class PubnubUtil
 			{
 				if (listener != null)
 					listener.onSuccess(channel, content);
+				return true;
 			}
 			else
 			{
 				if (listener != null)
 					listener.onError(channel, content);
+				return false;
 			}
 		}
 		catch (Exception e)
@@ -125,11 +127,7 @@ public class PubnubUtil
 			e.printStackTrace();
 			if (listener != null)
 				listener.onError(channel, e.toString());
-		}
-		finally
-		{
-			if (conn != null)
-				conn.disconnect();
+			return false;
 		}
 	}
 
