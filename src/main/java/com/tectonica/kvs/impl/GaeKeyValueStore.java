@@ -231,7 +231,9 @@ public class GaeKeyValueStore<V extends Serializable> extends AbstractKeyValueSt
 	@Override
 	public Lock getModificationLock(String key)
 	{
-		return GaeMemcacheLock.getLock(kind + ":" + key, true);
+		String prefix = config.usingNamespace ? config.namespace + "-" : "";
+		String locksCacheNS = prefix + "lock-" + kind;
+		return GaeMemcacheLock.getLock(key, true, locksCacheNS);
 	}
 
 	/***********************************************************************************
@@ -533,19 +535,19 @@ public class GaeKeyValueStore<V extends Serializable> extends AbstractKeyValueSt
 	 * 
 	 ***********************************************************************************/
 
-	private abstract class MemcachedBasedCache implements Cache<String, V>
+	private abstract class AbstractMemcachedBasedCache implements Cache<String, V>
 	{
 		protected final MemcacheService mc;
 
-		protected MemcachedBasedCache()
+		protected AbstractMemcachedBasedCache()
 		{
-			String gaeNS = NamespaceManager.get();
-			String mcNS = (gaeNS == null) ? kind : gaeNS + "-" + kind;
-			mc = MemcacheServiceFactory.getMemcacheService(mcNS);
+			String prefix = config.usingNamespace ? config.namespace + "-" : "";
+			String kvsCacheNS = prefix + "kvs-" + kind;
+			mc = MemcacheServiceFactory.getMemcacheService(kvsCacheNS);
 		}
 	}
 
-	private class JavaSerializeCache extends MemcachedBasedCache
+	private class JavaSerializeCache extends AbstractMemcachedBasedCache
 	{
 		@Override
 		@SuppressWarnings("unchecked")
@@ -586,7 +588,7 @@ public class GaeKeyValueStore<V extends Serializable> extends AbstractKeyValueSt
 		}
 	};
 
-	private class CustomSerializeCache extends MemcachedBasedCache
+	private class CustomSerializeCache extends AbstractMemcachedBasedCache
 	{
 		@Override
 		public V get(String key)

@@ -23,6 +23,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.appengine.api.memcache.Expiration;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheService.SetPolicy;
@@ -41,7 +44,7 @@ import com.tectonica.collections.AutoEvictMap;
  * The usage is straightforward
  * 
  * <pre>
- * Lock lock = GaeMemcacheLock.getLock("LOCK_NAME", true);
+ * Lock lock = GaeMemcacheLock.getLock("LOCK_GLOBAL_NAME", true, "NAMESPACE_GLOBAL_NAME");
  * lock.lock();
  * try {
  *    ...
@@ -51,8 +54,8 @@ import com.tectonica.collections.AutoEvictMap;
  * }
  * </pre>
  * 
- * Each lock attained with {@link #getLock(String, boolean)} must be eventually released with {@link #disposeLock(String)}. It's possible
- * however to attain a lock that's set for automatic disposal (upon its {@code unlock()}).
+ * Each lock attained with {@link #getLock(String, boolean, String)} must be eventually released with {@link #disposeLock(String)}. It's
+ * possible however to attain a lock that's set for automatic disposal (upon its {@code unlock()}).
  * <p>
  * NOTE: Locking with Memcache is not a bullet-proof solution, as unexpected eviction of the cache may result in a situation where one
  * instance acquires a lock that is in fact taken by another. However, the risk is very minimal especially if using the Dedicated Plan from
@@ -65,6 +68,8 @@ public class GaeMemcacheLock implements Lock
 {
 	private static final int LOCK_AUTO_EXPIRATION_MS = 30000;
 	private static final long SLEEP_BETWEEN_RETRIES_MS = 50L;
+
+	private static final Logger LOG = LoggerFactory.getLogger(GaeMemcacheLock.class);
 
 	private final MemcacheService mc;
 	private final String globalName;
@@ -216,7 +221,11 @@ public class GaeMemcacheLock implements Lock
 		int depth = reentranceDepth.get().intValue() - 1;
 		reentranceDepth.set(depth);
 		if (depth == 0)
-			mc.delete(globalName);
+		{
+			final boolean deleted = mc.delete(globalName);
+			if (!deleted)
+				LOG.warn("Unexpected behavior of lock. consider using namespaces");
+		}
 	}
 
 	@Override
@@ -243,26 +252,30 @@ public class GaeMemcacheLock implements Lock
 	private static AutoEvictMap<String, GaeMemcacheLock> locks = new AutoEvictMap<>();
 
 	/**
-	 * see {@link #getLock(String, boolean, String, boolean, long)}
+	 * calls {@link #getLock(String, boolean, String, boolean, long)} with unfair locking (more efficient) and 50ms sleep-between-retries
 	 */
-	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked)
+	public static GaeMemcacheLock getLock(String globalName, boolean disposeWhenUnlocked, String namespace)
 	{
-		return getLock(globalName, disposeWhenUnlocked, null, false, SLEEP_BETWEEN_RETRIES_MS);
+		return getLock(globalName, disposeWhenUnlocked, namespace, false, SLEEP_BETWEEN_RETRIES_MS);
 	}
 
 	/**
-	 * Returns a {@link Lock} object, for global locking within all App-Engine instances (or more accurately, all that share a given
+	 * Returns a {@link Lock} object, for global locking across all App-Engine instances (or more accurately, all that share a given
 	 * namespace). When the lock is no longer needed, invoke {@link #disposeLock(String)}. Alternatively, you may pass
 	 * {@code disposeWhenUnlocked = true} here to have the dispose invoked automatically upon {@link Lock#unlock()}.
 	 * <p>
 	 * NOTE: The returned lock does not support {@link #newCondition()}.
 	 * 
 	 * @param globalName
-	 *            unique name among all the App Engine instances
+	 *            a name that uniquely identifies the locked object across all the instances
 	 * @param disposeWhenUnlocked
 	 *            if true, disposes the returned lock automatically upon {@link Lock#unlock()}
 	 * @param namespace
-	 *            if not null, uses a namespaced Memcache service
+	 *            if not null, uses a namespaced Memcache service, which is also expected to be identical in all instances targeting a given
+	 *            locked object. The globalName of the lock is in fact unique only within its namespace, so if you have different key sets
+	 *            (e.g. stored in different tables), it can be handy to store each set in a different namespace corresponding to the table
+	 *            (alternatively you can concatenate the key with the table name to achieve similar effect). However, if you're using
+	 *            namespaces elsewhere in your app-engine project, it is highly recommended that you explicitly specify one here as well
 	 * @param locallyFair
 	 *            indicates whether it's important to treat the local threads waiting on the lock fairly
 	 * @param sleepBetweenRetriesMS
