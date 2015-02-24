@@ -20,11 +20,30 @@ package com.tectonica.collections;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class ConcurrentMultimap<K, V>
 {
-	private ConcurrentHashMap<K, Set<V>> map = new ConcurrentHashMap<>();
+	protected final boolean sortValueSets;
+	protected ConcurrentMap<K, Set<V>> map;
+
+	public ConcurrentMultimap()
+	{
+		this(false);
+	}
+
+	public ConcurrentMultimap(boolean sortValueSets)
+	{
+		this.sortValueSets = sortValueSets;
+		initMap();
+	}
+
+	protected void initMap()
+	{
+		map = new ConcurrentHashMap<>();
+	}
 
 	public int put(K key, V value)
 	{
@@ -36,7 +55,7 @@ public class ConcurrentMultimap<K, V>
 		Set<V> valuesSet;
 		if (autoCreateKey)
 		{
-			HashSet<V> emptySet = new HashSet<V>();
+			Set<V> emptySet = new HashSet<V>();
 			valuesSet = map.putIfAbsent(key, emptySet);
 			if (valuesSet == null)
 				valuesSet = emptySet;
@@ -61,7 +80,8 @@ public class ConcurrentMultimap<K, V>
 			return null;
 		synchronized (valuesSet)
 		{
-			return new HashSet<V>(valuesSet);
+			// we return a copy of the set, so that the caller won't be affected by future changes
+			return sortValueSets ? new TreeSet<V>(valuesSet) : new HashSet<V>(valuesSet);
 		}
 	}
 
