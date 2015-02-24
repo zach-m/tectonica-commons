@@ -8,7 +8,9 @@ import java.util.logging.Logger;
 
 import javax.mail.MessagingException;
 
+import org.junit.Ignore;
 import org.junit.Test;
+
 import com.tectonica.util.EmailSender;
 
 public class TestEmailSender
@@ -16,6 +18,7 @@ public class TestEmailSender
 	private static Logger LOG = Logger.getLogger(TestEmailSender.class.getSimpleName());
 
 	@Test
+	@Ignore
 	public void test() throws UnsupportedEncodingException
 	{
 		SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yy HH:mm:ss.SSS");

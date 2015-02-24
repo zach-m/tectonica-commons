@@ -2,4 +2,3 @@
 .project
 .settings/
 .classpath
-WEB-INF/appengine-generated/*
