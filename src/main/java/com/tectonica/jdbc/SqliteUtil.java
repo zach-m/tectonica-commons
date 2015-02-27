@@ -18,6 +18,8 @@
 
 package com.tectonica.jdbc;
 
+import java.util.Date;
+
 import javax.sql.DataSource;
 
 import org.sqlite.SQLiteDataSource;
@@ -51,4 +53,26 @@ public class SqliteUtil
 
 		return new JDBC(connPool);
 	}
+
+	public static <F> String javaTypeToSqliteTypeAffinity(Class<F> indexClz)
+	{
+		String colType = "NONE";
+		if (indexClz != null)
+		{
+			if (CharSequence.class.isAssignableFrom(indexClz))
+				colType = "TEXT";
+			else if (Number.class.isAssignableFrom(indexClz))
+			{
+				colType = "NUMERIC";
+				if (indexClz == Byte.class || indexClz == Short.class || indexClz == Integer.class || indexClz == Long.class)
+					colType = "INTEGER";
+				else if (indexClz == Float.class || indexClz == Double.class)
+					colType = "REAL";
+			}
+			else if (Date.class.isAssignableFrom(indexClz))
+				colType = "DATETIME"; // not an affinity, yet clearer
+		}
+		return colType;
+	}
+
 }
